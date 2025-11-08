@@ -472,7 +472,10 @@ class Rotkehlchen:
                 ethereum_inquirer=ethereum_inquirer,
                 database=self.data.db,
             ),
-            bitcoin_manager=BitcoinManager(database=self.data.db),
+            bitcoin_manager=BitcoinManager(
+                greenlet_manager=self.greenlet_manager,
+                database=self.data.db
+            ),
             bitcoin_cash_manager=BitcoinCashManager(database=self.data.db),
             solana_manager=SolanaManager(
                 node_inquirer=SolanaInquirer(

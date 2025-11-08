@@ -563,3 +563,23 @@ def test_bitcoin_balance_api_resolver(
                 ),
             ):
                 bitcoin_manager.query_balances(addresses)
+
+def test_local_bitcoin_node(bitcoin_manager: "BitcoinManager"):
+    print("starting test")
+    addresses = [
+        BTCAddress("3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5"),
+        BTCAddress("34SjMcbLquZ7HmFmQiAHqEHY4mBEbvGeVL"),
+        BTCAddress("3J7sT2fbDaF3XrjpWM5GsUyaDr7i7psi88"),
+        BTCAddress("36Z62MQfJHF11DWqMMzc3rqLiDFGiVF8CB"),
+        BTCAddress("33k4CdyQJFwXQD9giSKyo36mTvE9Y6C9cP"),
+    ]
+
+    def check_balances(balances_to_check: dict[BTCAddress, FVal]) -> None:
+        for addr in addresses:
+            assert addr in balances_to_check
+
+    # Test balances are returned properly if first source works
+    balances = bitcoin_manager.get_balances(addresses)
+    check_balances(balances)
+    print(f"{balances}")
+    # for balance in balances:

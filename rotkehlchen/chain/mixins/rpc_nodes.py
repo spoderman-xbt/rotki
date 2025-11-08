@@ -57,7 +57,7 @@ class RPCManagerMixin(ABC, Generic[WEB3_NODE_TYPE]):
     Mixin that provides logic for managing RPC nodes. It tracks active connections
     and implements the core mechanisms for connecting to them.
 
-    This mixin is intended for chains that support RPCs, such as EVM-based chains
+    This mixin is intended for chains that support RPCs, such as EVM-based chains, Bitcoin
     and Solana. It is not used directly, since each chain introduces small
     differences in behavior. Instead, chain-specific mixins (e.g. `EVMRPCMixin`,
     `SolanaRPCMixin`) extend this class and adjust parameters such as
@@ -396,3 +396,140 @@ class SolanaRPCMixin(RPCManagerMixin['Client']):
             return client.get_block(0).value.blockhash == SOLANA_GENESIS_BLOCK_HASH
         except (RPCException, SolanaRpcException, SerdeJSONError):
             return False
+
+
+class BitcoinRPCMixin(RPCManagerMixin['Client']):
+    """Implementation of RPCManagerMixin for Bitcoin using mempool.space-like API
+
+    This mixin handles connections to custom mempool.space-like API endpoints
+    for Bitcoin blockchain data. It follows the same API structure as the
+    public mempool.space and blockstream.info services.
+    """
+    blockchain: Literal[SupportedBlockchain.BITCOIN]
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+
+    def _init_btc_client(self, node: NodeName) -> tuple[Any, str]:
+        """Initialize a mempool.space-like API client
+
+        Returns:
+            A tuple of (client, api_endpoint)
+        """
+        # Format endpoint with proper scheme
+        parsed = urlparse(node.endpoint)
+        if not parsed.scheme:
+            api_endpoint = f'http://{node.endpoint}'
+        else:
+            api_endpoint = node.endpoint
+
+        # Remove trailing slash if present
+        api_endpoint = api_endpoint.rstrip('/')
+
+        class MempoolAPIClient:
+            """Client for mempool.space-like API endpoints"""
+
+            def __init__(self, base_url: str, timeout: int) -> None:
+                self.base_url = base_url
+                self.timeout = timeout
+                self.session = requests.Session()
+
+            def get_address_info(self, address: str) -> dict[str, Any]:
+                """Get address information including balance and tx count
+
+                May raise:
+                - RemoteError if request fails
+                """
+                try:
+                    response = self.session.get(
+                        f'{self.base_url}/address/{address}',
+                        timeout=self.timeout,
+                    )
+                    response.raise_for_status()
+                    return response.json()
+                except requests.RequestException as e:
+                    raise RemoteError(f'Failed to query address info: {e}') from e
+                except json.JSONDecodeError as e:
+                    raise RemoteError(f'Invalid JSON response: {e}') from e
+
+            def is_connected(self) -> bool:
+                """Check if connection to the API is active"""
+                try:
+                    # Test connection by getting blockchain tip height
+                    response = self.session.get(
+                        f'{self.base_url}/blocks/tip/height',
+                        timeout=self.timeout,
+                    )
+                    response.raise_for_status()
+                    # Should return a numeric block height
+                    height = int(response.text.strip())
+                    return height > 0
+                except (requests.RequestException, ValueError, json.JSONDecodeError):
+                    return False
+
+        client = MempoolAPIClient(api_endpoint, self.rpc_timeout)
+        return client, api_endpoint
+
+    def attempt_connect(
+            self,
+            node: NodeName,
+            connectivity_check: bool = True,
+    ) -> tuple[bool, str]:
+        """Attempt to connect to a Bitcoin mempool.space-like API endpoint
+
+        For our own node if the given endpoint is not the same as the saved one
+        the connection is re-attempted to the new one
+        """
+        if node in self.rpc_mapping:
+            return True, f'Already connected to {node} {self.chain_name} node'
+
+        try:
+            client, api_endpoint = self._init_btc_client(node)
+        except RemoteError as e:
+            message = f'Failed to initialize Bitcoin API client for {node}: {e}'
+            log.warning(message)
+            return False, message
+
+        try:
+            is_connected = client.is_connected()
+        except (requests.RequestException, RemoteError) as e:
+            message = f'Failed to connect to Bitcoin API {node} at endpoint {api_endpoint}: {e}'
+            log.warning(message)
+            return False, message
+
+        if is_connected:
+            if connectivity_check:
+                try:
+                    # Verify the API is responsive by getting block tip height
+                    response = client.session.get(
+                        f'{api_endpoint}/blocks/tip/height',
+                        timeout=self.rpc_timeout,
+                    )
+                    response.raise_for_status()
+                    block_height = int(response.text.strip())
+
+                    if not isinstance(block_height, int) or block_height <= 0:
+                        raise RemoteError(f'Invalid block height: {block_height}')
+
+                except (requests.RequestException, ValueError, RemoteError) as e:
+                    message = (
+                        f'Failed to verify Bitcoin API {node} at endpoint '
+                        f'{api_endpoint} due to {e!s}'
+                    )
+                    log.warning(message)
+                    return False, message
+
+            # Mempool.space-like APIs are typically full nodes with complete history
+            # They are not pruned and serve as archive nodes
+            log.info(f'Connected Bitcoin API {node} at {api_endpoint}')
+            self.rpc_mapping[node] = RPCNode(
+                rpc_client=client,
+                is_pruned=False,
+                is_archive=True,
+            )
+            return True, ''
+
+        # Connection failed
+        message = f'Failed to connect to Bitcoin API {node} at endpoint {api_endpoint}'
+        log.warning(message)
+        return False, message

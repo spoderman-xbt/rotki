@@ -60,6 +60,10 @@ const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
     setting: 'dotRpcEndpoint',
   },
   {
+    chain: Blockchain.BTC,
+    component: defineAsyncComponent(() => import('@/components/settings/general/rpc/BlockchainRpcNodeManager.vue')),
+  },
+  {
     component: defineAsyncComponent(() => import('@/components/settings/general/rpc/simple/SimpleRpcNodeManager.vue')),
     id: 'eth_consensus_layer',
     image: getPublicProtocolImagePath('ethereum.svg'),
