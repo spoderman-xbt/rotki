@@ -27,7 +27,7 @@ from rotkehlchen.chain.manager import ChainManagerWithTransactions
 from rotkehlchen.constants.misc import ZERO
 from rotkehlchen.db.cache import DBCacheDynamic
 from rotkehlchen.db.history_events import DBHistoryEvents
-from rotkehlchen.errors.misc import RemoteError, UnableToDecryptRemoteData
+from rotkehlchen.errors.misc import RemoteError, UnableToDecryptRemoteData, InputError
 from rotkehlchen.errors.serialization import DeserializationError
 from rotkehlchen.fval import FVal
 from rotkehlchen.history.events.structures.base import HistoryEvent
@@ -121,31 +121,34 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
             blockchain=self.blockchain,
             only_active=True,
         )
-        # TODO: Should instead check owned, active, weight etc.
         if weighted_nodes:
-            first = weighted_nodes[0] # TODO: do proper thingy
-            url = first.node_info.endpoint
-            if not url.rstrip('/').endswith('api'):
-                url = os.path.join(url, 'api')
-            owned_node_callback =  BtcApiCallback(
-                name='local mempool',
-                balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
-                has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=url, accounts=accounts),  # noqa: E501
-                transactions_fn=None,  # this API doesn't handle p2pk txs properly
-            )
-            try:
-                return owned_node_callback.balances_fn(accounts)
-            except (
-                    requests.exceptions.RequestException,
-                    UnableToDecryptRemoteData,
-                    requests.exceptions.Timeout,
-                    RemoteError,
-                    DeserializationError,
-                    KeyError,
-                ) as e:
-                msg = f'Missing key {e!s}' if isinstance(e, KeyError) else str(e)
-                log.debug(f'External {self.blockchain!s} API request to {owned_node_callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
-                errors[owned_node_callback.name] = msg
+            for node in weighted_nodes:
+                if not node.node_info.owned:
+                    raise InputError("This feature only really makes sense for owned nodes") # TODO: fix
+                if not node.active:
+                    continue
+                url = node.node_info.endpoint
+                if not url.rstrip('/').endswith('api'):
+                    url = os.path.join(url, 'api')
+                owned_node_callback =  BtcApiCallback(
+                    name='custom mempool space',
+                    balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
+                    has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=url, accounts=accounts),  # noqa: E501
+                    transactions_fn=None,  # this API doesn't handle p2pk txs properly
+                )
+                try:
+                    return owned_node_callback.balances_fn(accounts)
+                except (
+                        requests.exceptions.RequestException,
+                        UnableToDecryptRemoteData,
+                        requests.exceptions.Timeout,
+                        RemoteError,
+                        DeserializationError,
+                        KeyError,
+                    ) as e:
+                    msg = f'Missing key {e!s}' if isinstance(e, KeyError) else str(e)
+                    log.debug(f'External {self.blockchain!s} API request to {owned_node_callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
+                    errors[owned_node_callback.name] = msg
 
         else:
             for callback in self.api_callbacks:
