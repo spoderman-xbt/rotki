@@ -1,4 +1,5 @@
 import logging
+import os
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -18,8 +19,10 @@ from rotkehlchen.chain.bitcoin.types import (
     BtcQueryAction,
     BtcTxIODirection,
 )
-from rotkehlchen.chain.bitcoin.utils import OpCodes
+from rotkehlchen.chain.bitcoin.utils import OpCodes, query_blockstream_like_balances, \
+    query_blockstream_like_has_transactions
 from rotkehlchen.chain.decoding.utils import decode_transfer_direction
+from rotkehlchen.chain.evm.types import WeightedNode
 from rotkehlchen.chain.manager import ChainManagerWithTransactions
 from rotkehlchen.constants.misc import ZERO
 from rotkehlchen.db.cache import DBCacheDynamic
@@ -114,16 +117,24 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
         - RemoteError if the queries to all the APIs fail.
         """
         errors: dict[str, str] = {}
-        for callback in self.api_callbacks:
+        weighted_nodes: Sequence[WeightedNode] = self.database.get_rpc_nodes(
+            blockchain=self.blockchain,
+            only_active=True,
+        )
+        # TODO: Should instead check owned, active, weight etc.
+        if weighted_nodes:
+            first = weighted_nodes[0] # TODO: do proper thingy
+            url = first.node_info.endpoint
+            if not url.rstrip('/').endswith('api'):
+                url = os.path.join(url, 'api')
+            owned_node_callback =  BtcApiCallback(
+                name='local mempool',
+                balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
+                has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=url, accounts=accounts),  # noqa: E501
+                transactions_fn=None,  # this API doesn't handle p2pk txs properly
+            )
             try:
-                if action == BtcQueryAction.BALANCES and callback.balances_fn is not None:
-                    return callback.balances_fn(accounts)
-                if action == BtcQueryAction.HAS_TRANSACTIONS and callback.has_transactions_fn is not None:  # noqa: E501
-                    return callback.has_transactions_fn(accounts)
-                if action == BtcQueryAction.TRANSACTIONS and callback.transactions_fn is not None:
-                    return callback.transactions_fn(accounts, options)  # type: ignore[arg-type] # overloads ensure options will not be None for txs
-                # else skip to the next api if the function for this action is not implemented
-                continue
+                return owned_node_callback.balances_fn(accounts)
             except (
                     requests.exceptions.RequestException,
                     UnableToDecryptRemoteData,
@@ -131,10 +142,33 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                     RemoteError,
                     DeserializationError,
                     KeyError,
-            ) as e:
+                ) as e:
                 msg = f'Missing key {e!s}' if isinstance(e, KeyError) else str(e)
-                log.debug(f'External {self.blockchain!s} API request to {callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
-                errors[callback.name] = msg
+                log.debug(f'External {self.blockchain!s} API request to {owned_node_callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
+                errors[owned_node_callback.name] = msg
+
+        else:
+            for callback in self.api_callbacks:
+                try:
+                    if action == BtcQueryAction.BALANCES and callback.balances_fn is not None:
+                        return callback.balances_fn(accounts)
+                    if action == BtcQueryAction.HAS_TRANSACTIONS and callback.has_transactions_fn is not None:  # noqa: E501
+                        return callback.has_transactions_fn(accounts)
+                    if action == BtcQueryAction.TRANSACTIONS and callback.transactions_fn is not None:
+                        return callback.transactions_fn(accounts, options)  # type: ignore[arg-type] # overloads ensure options will not be None for txs
+                    # else skip to the next api if the function for this action is not implemented
+                    continue
+                except (
+                        requests.exceptions.RequestException,
+                        UnableToDecryptRemoteData,
+                        requests.exceptions.Timeout,
+                        RemoteError,
+                        DeserializationError,
+                        KeyError,
+                ) as e:
+                    msg = f'Missing key {e!s}' if isinstance(e, KeyError) else str(e)
+                    log.debug(f'External {self.blockchain!s} API request to {callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
+                    errors[callback.name] = msg
 
         serialized_errors = ', '.join(f'{source} error is: "{error}"' for (source, error) in errors.items())  # noqa: E501
         raise RemoteError(f'External {self.blockchain!s} request failed for all available APIs. {serialized_errors}')  # noqa: E501

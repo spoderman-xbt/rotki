@@ -8,7 +8,7 @@ import LocationDisplay from '@/components/history/LocationDisplay.vue';
 import SettingCategoryHeader from '@/components/settings/SettingCategoryHeader.vue';
 import { useSupportedChains } from '@/composables/info/chains';
 import { isOfEnum } from '@/utils';
-import { getPublicProtocolImagePath } from '@/utils/file';
+import {getPublicProtocolImagePath, getPublicServiceImagePath} from '@/utils/file';
 
 const { t } = useI18n({ useScope: 'global' });
 
@@ -65,6 +65,12 @@ const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
     image: getPublicProtocolImagePath('ethereum.svg'),
     name: 'ETH Beacon Node',
     setting: 'beaconRpcEndpoint',
+  },
+  {
+    id: 'btc_mempool_space',
+    name: 'Mempool',
+    component: defineAsyncComponent(() => import('@/components/settings/general/rpc/BlockchainRpcNodeManager.vue')),
+    image: getPublicServiceImagePath('mempool.png'),
   },
 ]);
 
