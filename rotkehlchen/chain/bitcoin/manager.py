@@ -122,14 +122,16 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
             only_active=True,
         )
         if weighted_nodes:
+            log.debug(f'Querying custom node')
             for node in weighted_nodes:
                 if not node.node_info.owned:
-                    raise InputError("This feature only really makes sense for owned nodes") # TODO: fix
+                    raise InputError('This feature only really makes sense for owned nodes') # TODO: fix
                 if not node.active:
                     continue
                 url = node.node_info.endpoint
                 if not url.rstrip('/').endswith('api'):
                     url = os.path.join(url, 'api')
+                log.debug(f'Querying custom API {url}')
                 owned_node_callback =  BtcApiCallback(
                     name='custom mempool space',
                     balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
@@ -151,6 +153,7 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                     errors[owned_node_callback.name] = msg
 
         else:
+            log.debug('Querying default APIs')
             for callback in self.api_callbacks:
                 try:
                     if action == BtcQueryAction.BALANCES and callback.balances_fn is not None:

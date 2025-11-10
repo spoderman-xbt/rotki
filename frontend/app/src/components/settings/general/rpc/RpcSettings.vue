@@ -42,6 +42,20 @@ const evmChainTabs = useArrayMap(txEvmChains, (chain) => {
   } satisfies RpcSettingTab;
 });
 
+// const customBlockchainDisplay = computed((chain) => {
+//   if (chain === Blockchain.BTC) {
+//     return {
+//       name: 'Mempool',
+//       image: 'mempool.png'
+//     };
+//   }
+//   // Fall back to API values for other chains
+//   return {
+//     name: getChainName(chain),
+//     image: getChainImage(chain)
+//   };
+// });
+
 const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
   ...get(evmChainTabs),
   {
@@ -67,6 +81,7 @@ const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
     setting: 'beaconRpcEndpoint',
   },
   {
+    chain: Blockchain.BTC,
     id: 'btc_mempool_space',
     name: 'Mempool',
     component: defineAsyncComponent(() => import('@/components/settings/general/rpc/BlockchainRpcNodeManager.vue')),
