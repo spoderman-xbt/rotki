@@ -267,7 +267,6 @@ def query_blockstream_like_balances(
     log.debug(f'Querying f{base_url} for balances')
     balances = {}
     for account in accounts:
-
         balance, _ = query_blockstream_like_account_info(base_url, account)
         balances[account] = balance
     return balances

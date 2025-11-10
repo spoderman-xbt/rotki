@@ -117,29 +117,29 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
         - RemoteError if the queries to all the APIs fail.
         """
         errors: dict[str, str] = {}
-        weighted_nodes: Sequence[WeightedNode] = self.database.get_rpc_nodes(
+        custom_mempool_api: Sequence[WeightedNode] = self.database.get_rpc_nodes(
             blockchain=self.blockchain,
             only_active=True,
         )
-        if weighted_nodes:
-            log.debug(f'Querying custom node')
-            for node in weighted_nodes:
-                if not node.node_info.owned:
-                    raise InputError('This feature only really makes sense for owned nodes') # TODO: fix
-                if not node.active:
+        if custom_mempool_api:
+            log.debug(f'Querying custom API')
+            for api in custom_mempool_api:
+                if not api.node_info.owned:
+                    raise InputError('Unowned Mempool instances are not supported')
+                if not api.active:
                     continue
-                url = node.node_info.endpoint
+                url = api.node_info.endpoint
                 if not url.rstrip('/').endswith('api'):
                     url = os.path.join(url, 'api')
                 log.debug(f'Querying custom API {url}')
-                owned_node_callback =  BtcApiCallback(
+                owned_api_callback =  BtcApiCallback(
                     name='custom mempool space',
                     balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
                     has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=url, accounts=accounts),  # noqa: E501
                     transactions_fn=None,  # this API doesn't handle p2pk txs properly
                 )
                 try:
-                    return owned_node_callback.balances_fn(accounts)
+                    return owned_api_callback.balances_fn(accounts)
                 except (
                         requests.exceptions.RequestException,
                         UnableToDecryptRemoteData,
@@ -149,8 +149,8 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                         KeyError,
                     ) as e:
                     msg = f'Missing key {e!s}' if isinstance(e, KeyError) else str(e)
-                    log.debug(f'External {self.blockchain!s} API request to {owned_node_callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
-                    errors[owned_node_callback.name] = msg
+                    log.debug(f'External {self.blockchain!s} API request to {owned_api_callback.name} failed due to {msg}. Trying next API.')  # noqa: E501
+                    errors[owned_api_callback.name] = msg
 
         else:
             log.debug('Querying default APIs')
