@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import type { Component } from 'vue';
+import type {Component} from 'vue';
 import type BlockchainRpcNodeManager from '@/components/settings/general/rpc/BlockchainRpcNodeManager.vue';
 import type SimpleRpcNodeManager from '@/components/settings/general/rpc/simple/SimpleRpcNodeManager.vue';
-import { assert, Blockchain } from '@rotki/common';
+import {assert, Blockchain} from '@rotki/common';
 import AppImage from '@/components/common/AppImage.vue';
 import LocationDisplay from '@/components/history/LocationDisplay.vue';
 import SettingCategoryHeader from '@/components/settings/SettingCategoryHeader.vue';
-import { useSupportedChains } from '@/composables/info/chains';
-import { isOfEnum } from '@/utils';
+import {useSupportedChains} from '@/composables/info/chains';
+import {isOfEnum} from '@/utils';
 import {getPublicProtocolImagePath, getPublicServiceImagePath} from '@/utils/file';
 
 const { t } = useI18n({ useScope: 'global' });
@@ -83,13 +83,15 @@ const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
   {
     chain: Blockchain.BTC,
     id: 'btc_mempool_space',
-    name: 'Mempool',
+    name: 'Bitcoin Mempool',
     component: defineAsyncComponent(() => import('@/components/settings/general/rpc/BlockchainRpcNodeManager.vue')),
     image: getPublicServiceImagePath('mempool.png'),
   },
 ]);
 
 function isChain(item: RpcSettingTab): item is ChainRpcSettingTab {
+  if (('chain' in item) && item.chain == Blockchain.BTC)
+    return false  // special case for bitcoin
   return 'chain' in item;
 }
 

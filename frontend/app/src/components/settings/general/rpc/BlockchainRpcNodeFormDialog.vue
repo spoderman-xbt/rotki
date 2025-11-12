@@ -30,6 +30,7 @@ const stateUpdated = ref(false);
 const { getChainName } = useSupportedChains();
 
 const chain = computed<Blockchain>(() => {
+  console.log(get(model))
   const blockchain = get(model)?.node.blockchain;
   if (!blockchain || !isBlockchain(blockchain))
     return Blockchain.ETH;

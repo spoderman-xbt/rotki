@@ -122,7 +122,7 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
             only_active=True,
         )
         if custom_mempool_api:
-            log.debug(f'Querying custom API')
+            log.debug('Querying custom API')
             for api in custom_mempool_api:
                 if not api.node_info.owned:
                     raise InputError('Unowned Mempool instances are not supported')
@@ -132,14 +132,19 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                 if not url.rstrip('/').endswith('api'):
                     url = os.path.join(url, 'api')
                 log.debug(f'Querying custom API {url}')
-                owned_api_callback =  BtcApiCallback(
+                owned_api_callback = BtcApiCallback(
                     name='custom mempool space',
-                    balances_fn=lambda accounts: query_blockstream_like_balances(base_url=url, accounts=accounts),  # noqa: E501
-                    has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=url, accounts=accounts),  # noqa: E501
+                    balances_fn=lambda accounts, this_url=url: query_blockstream_like_balances(base_url=this_url, accounts=accounts),  # noqa: E501
+                    has_transactions_fn=lambda accounts, this_url=url: query_blockstream_like_has_transactions(base_url=this_url, accounts=accounts),  # noqa: E501
                     transactions_fn=None,  # this API doesn't handle p2pk txs properly
                 )
                 try:
-                    return owned_api_callback.balances_fn(accounts)
+                    if action == BtcQueryAction.BALANCES and owned_api_callback.balances_fn is not None:  # noqa: E501
+                        return owned_api_callback.balances_fn(accounts)
+                    if action == BtcQueryAction.HAS_TRANSACTIONS and owned_api_callback.has_transactions_fn is not None:  # noqa: E501
+                        return owned_api_callback.has_transactions_fn(accounts)
+                    if action == BtcQueryAction.TRANSACTIONS and owned_api_callback.transactions_fn is not None:  # noqa: E501
+                        return owned_api_callback.transactions_fn(accounts, options)  # type: ignore[arg-type] # overloads ensure options will not be None for txs
                 except (
                         requests.exceptions.RequestException,
                         UnableToDecryptRemoteData,
@@ -153,14 +158,14 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                     errors[owned_api_callback.name] = msg
 
         else:
-            log.debug('Querying default APIs')
+            log.debug('Querying default BitcoinCommon APIs')
             for callback in self.api_callbacks:
                 try:
                     if action == BtcQueryAction.BALANCES and callback.balances_fn is not None:
                         return callback.balances_fn(accounts)
                     if action == BtcQueryAction.HAS_TRANSACTIONS and callback.has_transactions_fn is not None:  # noqa: E501
                         return callback.has_transactions_fn(accounts)
-                    if action == BtcQueryAction.TRANSACTIONS and callback.transactions_fn is not None:
+                    if action == BtcQueryAction.TRANSACTIONS and callback.transactions_fn is not None:  # noqa: E501
                         return callback.transactions_fn(accounts, options)  # type: ignore[arg-type] # overloads ensure options will not be None for txs
                     # else skip to the next api if the function for this action is not implemented
                     continue
