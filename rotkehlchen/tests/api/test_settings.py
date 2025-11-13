@@ -1,5 +1,4 @@
 import dataclasses
-import sys
 from dataclasses import fields
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -361,6 +360,27 @@ def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer') -> None:
         'active': True,
         'blockchain': 'btc',
     }]
+
+    # Test editing a custom API
+    custom_node_id = result[0]['identifier']
+    patch_payload = {
+        'active': True,
+        'blockchain': 'btc',
+        'endpoint': 'http://localhost:4080',
+        'identifier': custom_node_id,
+        'name': 'local mempool',
+        'owned': True,
+        'weight': 0,
+    }
+    response = requests.patch(
+        api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
+        json=patch_payload,
+    )
+    assert_proper_response(response)
+    json_data = response.json()
+    result = json_data['result']
+    assert json_data['message'] == ''
+    assert result
 
 
 def test_disable_taxfree_after_period(rotkehlchen_api_server: 'APIServer') -> None:
