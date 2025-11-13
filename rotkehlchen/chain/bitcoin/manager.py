@@ -19,15 +19,17 @@ from rotkehlchen.chain.bitcoin.types import (
     BtcQueryAction,
     BtcTxIODirection,
 )
-from rotkehlchen.chain.bitcoin.utils import OpCodes, query_blockstream_like_balances, \
-    query_blockstream_like_has_transactions
+from rotkehlchen.chain.bitcoin.utils import (
+    OpCodes,
+    query_blockstream_like_balances,
+    query_blockstream_like_has_transactions,
+)
 from rotkehlchen.chain.decoding.utils import decode_transfer_direction
-from rotkehlchen.chain.evm.types import WeightedNode
 from rotkehlchen.chain.manager import ChainManagerWithTransactions
 from rotkehlchen.constants.misc import ZERO
 from rotkehlchen.db.cache import DBCacheDynamic
 from rotkehlchen.db.history_events import DBHistoryEvents
-from rotkehlchen.errors.misc import RemoteError, UnableToDecryptRemoteData, InputError
+from rotkehlchen.errors.misc import InputError, RemoteError, UnableToDecryptRemoteData
 from rotkehlchen.errors.serialization import DeserializationError
 from rotkehlchen.fval import FVal
 from rotkehlchen.history.events.structures.base import HistoryEvent
@@ -38,6 +40,7 @@ from rotkehlchen.types import BTCAddress, Location, SupportedBlockchain, Timesta
 from rotkehlchen.utils.misc import ts_now, ts_sec_to_ms
 
 if TYPE_CHECKING:
+    from rotkehlchen.chain.evm.types import WeightedNode
     from rotkehlchen.db.dbhandler import DBHandler
 
 logger = logging.getLogger(__name__)
