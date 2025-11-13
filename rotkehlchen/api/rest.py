@@ -20,6 +20,7 @@ from gevent.event import Event
 from gevent.lock import Semaphore
 from marshmallow.exceptions import ValidationError
 from pysqlcipher3 import dbapi2 as sqlcipher
+from rotkehlchen.chain.bitcoin.manager import BitcoinCommonManager
 from solders.solders import Signature
 from web3.exceptions import BadFunctionCallOutput
 from werkzeug.datastructures import FileStorage
@@ -2571,19 +2572,21 @@ class RestAPI:
             only_active=True,
         )
 
-        manager: ChainManagerWithNodesMixin = self.rotkehlchen.chains_aggregator.get_chain_manager(  # type: ignore  # will be manager with nodes
+        manager: ChainManagerWithNodesMixin = self.rotkehlchen.chains_aggregator.get_chain_manager(
             blockchain=node.node_info.blockchain,
         )
-        for entry in list(manager.node_inquirer.rpc_mapping):  # remove old node from memory
-            if entry.endpoint == old_endpoint:
-                manager.node_inquirer.rpc_mapping.pop(entry, None)
-                break
-        else:
-            log.debug(
-                f'Failed to find node with endpoint {old_endpoint} in web3 mappings. Skipping',
-            )
+        if not isinstance(manager, BitcoinCommonManager):  # special case for BTC
+            for entry in list(manager.node_inquirer.rpc_mapping):  # remove old node from memory
+                if entry.endpoint == old_endpoint:
+                    manager.node_inquirer.rpc_mapping.pop(entry, None)
+                    break
+            else:
+                log.debug(
+                    f'Failed to find node with endpoint {old_endpoint} in web3 mappings. Skipping',
+                )
 
-        manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
+            manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
+
         return api_response(OK_RESULT, status_code=HTTPStatus.OK)
 
     def delete_rpc_node(self, identifier: int, blockchain: SupportedBlockchain) -> Response:
