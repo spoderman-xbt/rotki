@@ -312,7 +312,7 @@ def test_unset_rpc_endpoint(rotkehlchen_api_server: 'APIServer', rpc_setting: li
 
 
 # @pytest.mark.parametrize('rpc_setting', ['ksm_rpc_endpoint'])
-def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer', rpc_setting: list[str]) -> None:
+def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer') -> None:
     """Test custom Bitcoin APIs """
     response = requests.get(
         api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
@@ -324,7 +324,14 @@ def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer', rpc_setting: li
     result = json_data['result']
     assert result[rpc_setting] != ''
 
-    data = {"active":true,"blockchain":"btc","endpoint":"https://ordpool.space","name":"ordpool","owned":true,"weight":0}
+    data = {
+        'active': True,
+        'blockchain': 'btc',
+        'endpoint': 'https://ordpool.space',
+        'name': 'ordpool',
+        'owned': True,
+        'weight': 0,
+    }
 
     response = requests.put(api_url_for(rotkehlchen_api_server, 'settingsresource'), json=data)
     assert_proper_response(response)
@@ -333,6 +340,7 @@ def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer', rpc_setting: li
     result = json_data['result']
     assert json_data['message'] == ''
     assert result[rpc_setting] == ''
+
 
 def test_disable_taxfree_after_period(rotkehlchen_api_server: 'APIServer') -> None:
     """Test that providing -1 for the taxfree_after_period setting disables it """
