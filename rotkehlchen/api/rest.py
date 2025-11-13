@@ -20,7 +20,6 @@ from gevent.event import Event
 from gevent.lock import Semaphore
 from marshmallow.exceptions import ValidationError
 from pysqlcipher3 import dbapi2 as sqlcipher
-from rotkehlchen.chain.bitcoin.manager import BitcoinCommonManager
 from solders.solders import Signature
 from web3.exceptions import BadFunctionCallOutput
 from werkzeug.datastructures import FileStorage
@@ -106,6 +105,7 @@ from rotkehlchen.chain.evm.types import (
     RemoteDataQueryStatus,
     WeightedNode,
 )
+from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
 from rotkehlchen.chain.zksync_lite.constants import ZKL_IDENTIFIER
 from rotkehlchen.constants import HOUR_IN_SECONDS, ONE
 from rotkehlchen.constants.limits import (
@@ -302,7 +302,6 @@ from rotkehlchen.types import (
 from rotkehlchen.utils.misc import combine_dicts, ts_ms_to_sec, ts_now
 from rotkehlchen.utils.snapshots import parse_import_snapshot_data
 from rotkehlchen.utils.version_check import get_current_version
-from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
 
 if TYPE_CHECKING:
     from rotkehlchen.assets.asset import CryptoAsset

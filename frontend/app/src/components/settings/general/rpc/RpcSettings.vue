@@ -42,20 +42,6 @@ const evmChainTabs = useArrayMap(txEvmChains, (chain) => {
   } satisfies RpcSettingTab;
 });
 
-// const customBlockchainDisplay = computed((chain) => {
-//   if (chain === Blockchain.BTC) {
-//     return {
-//       name: 'Mempool',
-//       image: 'mempool.png'
-//     };
-//   }
-//   // Fall back to API values for other chains
-//   return {
-//     name: getChainName(chain),
-//     image: getChainImage(chain)
-//   };
-// });
-
 const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
   ...get(evmChainTabs),
   {
