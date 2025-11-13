@@ -302,6 +302,7 @@ from rotkehlchen.types import (
 from rotkehlchen.utils.misc import combine_dicts, ts_ms_to_sec, ts_now
 from rotkehlchen.utils.snapshots import parse_import_snapshot_data
 from rotkehlchen.utils.version_check import get_current_version
+from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
 
 if TYPE_CHECKING:
     from rotkehlchen.assets.asset import CryptoAsset
@@ -309,7 +310,6 @@ if TYPE_CHECKING:
     from rotkehlchen.chain.evm.accounting.structures import BaseEventSettings
     from rotkehlchen.chain.evm.manager import EvmManager
     from rotkehlchen.chain.evm.node_inquirer import EvmNodeInquirer
-    from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
     from rotkehlchen.db.dbhandler import DBHandler
     from rotkehlchen.db.drivers.gevent import DBCursor
     from rotkehlchen.exchanges.kraken import KrakenAccountType
@@ -2572,10 +2572,10 @@ class RestAPI:
             only_active=True,
         )
 
-        manager: ChainManagerWithNodesMixin = self.rotkehlchen.chains_aggregator.get_chain_manager(
+        manager = self.rotkehlchen.chains_aggregator.get_chain_manager(
             blockchain=node.node_info.blockchain,
         )
-        if not isinstance(manager, BitcoinCommonManager):  # special case for BTC
+        if isinstance(manager, ChainManagerWithNodesMixin):
             for entry in list(manager.node_inquirer.rpc_mapping):  # remove old node from memory
                 if entry.endpoint == old_endpoint:
                     manager.node_inquirer.rpc_mapping.pop(entry, None)
@@ -2601,7 +2601,9 @@ class RestAPI:
             only_active=True,
         )
         manager = self.rotkehlchen.chains_aggregator.get_chain_manager(blockchain)  # type: ignore
-        manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
+        if isinstance(manager, ChainManagerWithNodesMixin):
+            manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
+
         return api_response(OK_RESULT, status_code=HTTPStatus.OK)
 
     @async_api_call()

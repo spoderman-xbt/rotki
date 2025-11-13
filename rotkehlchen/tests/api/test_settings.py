@@ -382,6 +382,17 @@ def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer') -> None:
     assert json_data['message'] == ''
     assert result
 
+    # test deleting
+    response = requests.delete(
+        api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
+        json={'identifier': custom_node_id},
+    )
+    assert_proper_response(response)
+    json_data = response.json()
+    result = json_data['result']
+    assert json_data['message'] == ''
+    assert result
+
 
 def test_disable_taxfree_after_period(rotkehlchen_api_server: 'APIServer') -> None:
     """Test that providing -1 for the taxfree_after_period setting disables it """
