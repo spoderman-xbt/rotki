@@ -1,4 +1,5 @@
 import dataclasses
+import sys
 from dataclasses import fields
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
@@ -311,19 +312,20 @@ def test_unset_rpc_endpoint(rotkehlchen_api_server: 'APIServer', rpc_setting: li
     assert result[rpc_setting] == ''
 
 
-# @pytest.mark.parametrize('rpc_setting', ['ksm_rpc_endpoint'])
 def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer') -> None:
     """Test custom Bitcoin APIs """
+
+    # First get current custom APIs and ensure there are none
     response = requests.get(
         api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
     )
     assert_proper_response(response)
     json_data = response.json()
-    print(json_data)
     assert json_data['message'] == ''
     result = json_data['result']
-    assert result[rpc_setting] != ''
+    assert result == []
 
+    # Next create a custom API
     data = {
         'active': True,
         'blockchain': 'btc',
@@ -332,14 +334,33 @@ def test_custom_bitcoin_api(rotkehlchen_api_server: 'APIServer') -> None:
         'owned': True,
         'weight': 0,
     }
-
-    response = requests.put(api_url_for(rotkehlchen_api_server, 'settingsresource'), json=data)
+    response = requests.put(
+        api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
+        json=data,
+    )
     assert_proper_response(response)
-
     json_data = response.json()
     result = json_data['result']
     assert json_data['message'] == ''
-    assert result[rpc_setting] == ''
+    assert result
+
+    # Now get them again to ensure they've been set correctly
+    response = requests.get(
+        api_url_for(rotkehlchen_api_server, 'rpcnodesresource', blockchain='btc'),
+    )
+    assert_proper_response(response)
+    json_data = response.json()
+    assert json_data['message'] == ''
+    result = json_data['result']
+    assert result == [{
+        'identifier': 56,
+        'name': 'ordpool',
+        'endpoint': 'https://ordpool.space',
+        'weight': '0.00',
+        'owned': True,
+        'active': True,
+        'blockchain': 'btc',
+    }]
 
 
 def test_disable_taxfree_after_period(rotkehlchen_api_server: 'APIServer') -> None:
