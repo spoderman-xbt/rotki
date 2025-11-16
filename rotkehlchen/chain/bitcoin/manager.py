@@ -129,8 +129,6 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
             for api in custom_mempool_api:
                 if not api.node_info.owned:
                     raise InputError('Unowned Mempool instances are not supported')
-                if not api.active:
-                    continue
                 url = api.node_info.endpoint
                 if not url.rstrip('/').endswith('api'):
                     url = os.path.join(url, 'api')

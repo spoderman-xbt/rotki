@@ -20,7 +20,7 @@ from rotkehlchen.chain.bitcoin.validation import is_valid_btc_address
 from rotkehlchen.chain.bitcoin.xpub import XpubData
 from rotkehlchen.chain.constants import NON_BITCOIN_CHAINS, SupportedBlockchain
 from rotkehlchen.chain.evm.types import WeightedNode
-from rotkehlchen.errors.misc import RemoteError, XPUBError
+from rotkehlchen.errors.misc import InputError, RemoteError, XPUBError
 from rotkehlchen.tests.utils.ens import ENS_BRUNO_BTC_ADDR, ENS_BRUNO_BTC_BYTES
 from rotkehlchen.tests.utils.factories import (
     UNIT_BTC_ADDRESS1,
@@ -629,3 +629,40 @@ def test_local_bitcoin_mempool_api(
         ]
 
         mock_mempool.assert_has_calls(expected_calls)  # type: ignore
+
+
+def test_unowned_bitcoin_mempool_api_fails_with_input_error(
+        network_mocking: bool,
+        bitcoin_manager: 'BitcoinManager',
+) -> None:
+    """Test that bitcoin balances are queried from local mempool instance"""
+    addresses = [
+        BTCAddress('3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5'),
+        BTCAddress('34SjMcbLquZ7HmFmQiAHqEHY4mBEbvGeVL'),
+        BTCAddress('3J7sT2fbDaF3XrjpWM5GsUyaDr7i7psi88'),
+        BTCAddress('36Z62MQfJHF11DWqMMzc3rqLiDFGiVF8CB'),
+        BTCAddress('33k4CdyQJFwXQD9giSKyo36mTvE9Y6C9cP'),
+    ]
+
+    find_usd_price_mock = patch(
+        'rotkehlchen.inquirer.Inquirer.find_usd_price',
+        return_value=90_000,
+    ) if network_mocking else nullcontext()
+
+    local_mempool_data = WeightedNode.deserialize({
+        'active': True,  # type: ignore
+        'blockchain': SupportedBlockchain.BITCOIN,  # type: ignore
+        'endpoint': 'http://localhost:4080',
+        'node': 'local mempool',
+        'owned': False,  # type: ignore
+        'weight': 50,  # type: ignore
+        'identifier': 0,  # type: ignore
+    })
+    get_rpc_nodes_mock = patch(
+        'rotkehlchen.db.dbhandler.DBHandler.get_rpc_nodes',
+        return_value=[local_mempool_data],
+    )
+
+    # Test balances are returned properly if first source works
+    with get_rpc_nodes_mock, find_usd_price_mock, pytest.raises(InputError):
+        bitcoin_manager.query_balances(addresses)
