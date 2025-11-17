@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 from typing import Any
 
+from rotkehlchen.constants import KRAKEN_BASE_URL
 from rotkehlchen.db.dbhandler import DBHandler
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.exchanges.kraken import Kraken
@@ -526,20 +527,20 @@ class MockKraken(Kraken):
 
         self.balance_data_return = {'XXBT': '5.0', 'XETH': '10.0', 'NOTAREALASSET': '15.0'}
         # Not required in the real Kraken instance but we use it in the tests
-        self.tradeable_pairs = self.api_query('AssetPairs')
+        self.tradeable_pairs = self.api_query(KRAKEN_BASE_URL, 'AssetPairs')
 
     @staticmethod
     def _load_results_from_file(filename: str) -> dict[str, Any]:
         dir_path = Path(__file__).resolve().parent.parent
         return jsonloads_dict((dir_path / 'data' / filename).read_text(encoding='utf8'))
 
-    def api_query(self, method: str, req: dict | None = None) -> dict:
+    def api_query(self, base_url: str, method: str, req: dict | None = None) -> dict:
         # Pretty ugly ... mock a kraken remote error
         if self.remote_errors:
             raise RemoteError('Kraken remote error')
 
         if self.use_original_kraken:
-            return super().api_query(method, req)
+            return super().api_query(base_url, method, req)
 
         if method == 'Balance':
             if self.random_balance_data:

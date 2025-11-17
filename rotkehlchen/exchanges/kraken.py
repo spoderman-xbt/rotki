@@ -240,7 +240,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action('Balance')
+        valid, msg = self._validate_single_api_key_action('accounts')
         if not valid:
             return False, msg
         valid, msg = self._validate_single_api_key_action(
@@ -263,7 +263,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         try:
-            self.api_query(method_str, req)
+            self.api_query(KRAKEN_FUTURES_BASE_URL, method_str, req)
         except (RemoteError, ValueError) as e:
             error = str(e)
             if 'Incorrect padding' in error:
@@ -281,8 +281,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             # else
             log.error(f'Kraken API key validation error: {e!s}')
             msg = (
-                'Unknown error at Kraken API key validation. Perhaps API '
-                'Key/Secret combination invalid?'
+                'Unknown error at Kraken API key validation. Perhaps API Key/Secret combination invalid?'  # noqa E501
             )
             return False, msg
         return True, ''
@@ -327,6 +326,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 call_counter=self.call_counter,
             )
             result = self._query_private_or_futures(base_url, method, req)
+            log.debug(f'Kraken API query result: {result}')
             if isinstance(result, str):
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
@@ -365,11 +365,14 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             'API-Sign': signature,
         })
         try:
+            final_url = base_url + urlpath
+            log.debug(f'MAKING QUERY TO {final_url}')
             response = self.session.post(
-                os.path.join(base_url, urlpath),
+                final_url,
                 data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
+            log.debug(f'response from Kraken Futures API: {response}')
         except requests.exceptions.RequestException as e:
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
@@ -398,8 +401,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
     @cache_response_timewise()
     def query_balances(self) -> ExchangeQueryBalances:
         try:
-            kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
-            # kraken_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION, 'accounts', req={})
+            # kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
+            kraken_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, 'accounts', req={})
             # kraken_futures_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION, 'accounts', req={})
         except RemoteError as e:
             if "Missing key: 'result'" in str(e):
@@ -415,6 +418,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
         assets_balance: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
         for kraken_name, amount_ in kraken_balances.items():
+            log.debug(f'deserializing kraken balance for {kraken_name} with amount: {amount_}')
             try:
                 amount = deserialize_fval(amount_)
                 if amount == ZERO:

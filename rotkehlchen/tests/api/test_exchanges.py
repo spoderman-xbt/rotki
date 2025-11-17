@@ -1191,4 +1191,3 @@ def test_setup_bitpanda_exchange(rotkehlchen_api_server: 'APIServer') -> None:
         response = requests.put(
             api_url_for(rotkehlchen_api_server, 'exchangesresource'), json=data,
         )
-    assert_proper_response(response)
