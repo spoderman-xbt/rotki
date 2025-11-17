@@ -6,6 +6,7 @@ import itertools
 import json
 import logging
 import operator
+import os
 import time
 from collections import defaultdict
 from collections.abc import Sequence
@@ -18,8 +19,14 @@ from requests import Response
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.converters import asset_from_kraken
-from rotkehlchen.constants import KRAKEN_API_VERSION, KRAKEN_BASE_URL, ZERO
+from rotkehlchen.constants import (
+    KRAKEN_API_VERSION,
+    KRAKEN_BASE_URL,
+    KRAKEN_FUTURES_API_VERSION,
+    ZERO,
+)
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
+from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
 from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY
 from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
@@ -290,7 +297,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         else:
             self.call_counter += 1
 
-    def api_query(self, method: str, req: dict | None = None) -> dict:
+    def api_query(self, base_url: str, method: str, req: dict | None = None) -> defaultdict:
         tries = KRAKEN_QUERY_TRIES
         while tries > 0:
             if self.call_counter + MAX_CALL_COUNTER_INCREASE > self.call_limit:
@@ -319,7 +326,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 data=req,
                 call_counter=self.call_counter,
             )
-            result = self._query_private(method, req)
+            result = self._query_private_or_futures(base_url, method, req)
             if isinstance(result, str):
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
@@ -338,18 +345,13 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             f'After {KRAKEN_QUERY_TRIES} kraken queries for {method} could still not be completed',
         )
 
-    def _query_private(self, method: str, req: dict | None = None) -> dict | str:
-        """API queries that require a valid key/secret pair.
+        # full_path = os.path.join(KRAKEN_FUTURES_BASE_URL, urlpath)
+        # urlpath = os.path.join('/' + KRAKEN_FUTURES_API_VERSION + method)
 
-        Arguments:
-        method -- API method name (string, no default)
-        req    -- additional API request parameters (default: {})
-
-        """
+    def _query_api(self, base_url: str, urlpath: str, method: str, req: dict | None):
         if req is None:
             req = {}
 
-        urlpath = '/' + KRAKEN_API_VERSION + '/private/' + method
         req['nonce'] = int(1000 * time.time())
         post_data = urlencode(req)
         # any unicode strings must be turned to bytes
@@ -364,7 +366,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         })
         try:
             response = self.session.post(
-                KRAKEN_BASE_URL + urlpath,
+                os.path.join(base_url, urlpath),
                 data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
@@ -374,12 +376,31 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
         return _check_and_get_response(response, method)
 
+    # TODO: split into different functions?
+    def _query_private_or_futures(self, base_url: str, method: str, req: dict | None = None) -> dict | str:
+        """API queries that require a valid key/secret pair.
+
+        Arguments:
+        method -- API method name (string, no default)
+        req    -- additional API request parameters (default: {})
+
+        """
+
+        if 'futures' in base_url:
+            urlpath = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION)
+        else:
+            urlpath = os.path.join('/', KRAKEN_API_VERSION, '/private/', method)
+
+        self._query_api(base_url, urlpath, method, req)
+
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
     def query_balances(self) -> ExchangeQueryBalances:
         try:
-            kraken_balances = self.api_query('Balance', req={})
+            kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
+            # kraken_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION, 'accounts', req={})
+            # kraken_futures_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION, 'accounts', req={})
         except RemoteError as e:
             if "Missing key: 'result'" in str(e):
                 # handle https://github.com/rotki/rotki/issues/946
