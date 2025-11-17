@@ -367,9 +367,9 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         try:
             final_url = base_url + urlpath
             log.debug(f'MAKING QUERY TO {final_url}')
-            response = self.session.post(
+            # response = self.session.post(
+            response = self.session.get(
                 final_url,
-                data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
             log.debug(f'response from Kraken Futures API: {response}')
@@ -390,7 +390,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         """
 
         if 'futures' in base_url:
-            urlpath = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION)
+            urlpath = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method)
         else:
             urlpath = os.path.join('/', KRAKEN_API_VERSION, '/private/', method)
 
