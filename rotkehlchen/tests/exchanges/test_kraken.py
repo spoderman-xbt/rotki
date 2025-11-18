@@ -167,19 +167,47 @@ def test_coverage_of_kraken_balances():
             f'Please update KRAKEN_DELISTED constant.',
         ))
 
-# @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
-# def test_gemini_validate_key(sandbox_gemini):
-#     """Test that validate api key works for a correct api key
-#
-#     Uses the Gemini sandbox
-#     """
-#     result, msg = sandbox_gemini.validate_api_key()
-#     assert result is True
-#     assert msg == ''
-#
 
-def test_querying_balances(kraken: MockKraken):
-    kraken.use_original_kraken = True
+@pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
+def test_kraken_validate_key(demo_kraken_futures):
+    """Test that validate api key works for a correct api key
+
+    Uses the kraken demo
+    """
+    result, msg = demo_kraken_futures.validate_api_key()
+    assert result is True
+    assert msg == ''
+
+
+@pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
+@pytest.mark.parametrize('kraken_demo_api_secret', [b'16NFMLWrVWf1TrHQtVExRFmBovnq'])
+def test_kraken_wrong_secret(demo_kraken_futures):
+    """Test that giving wrong api secret is detected
+
+    Uses the kraken demo
+    """
+    result, _ = demo_kraken_futures.validate_api_key()
+    assert not result
+    balances, msg = demo_kraken_futures.query_balances()
+    assert balances is None
+    assert 'Invalid API Key or API secret' in msg
+
+
+@pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
+@pytest.mark.parametrize('kraken_demo_api_key', ['fddad'])
+def test_kraken_wrong_key(demo_kraken_futures):
+    """Test that giving wrong api key is detected
+
+    Uses the kraken demo
+    """
+    result, _ = demo_kraken_futures.validate_api_key()
+    assert not result
+    balances, msg = demo_kraken_futures.query_balances()
+    assert balances is None
+    assert 'Invalid API Key or API secret' in msg
+
+
+def test_querying_balances(kraken):
     result, error_or_empty = kraken.query_balances()
     assert error_or_empty == ''
     assert isinstance(result, dict)

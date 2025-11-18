@@ -1,5 +1,6 @@
 import pytest
 
+from rotkehlchen.exchanges.kraken import Kraken
 from rotkehlchen.tests.utils.exchanges import create_test_kraken
 
 
@@ -34,18 +35,17 @@ def fixture_kraken(
         msg_aggregator=function_scope_messages_aggregator,
     )
 
-# @pytest.fixture(name='kraken')
-# def fixture_kraken(
-#         inquirer,  # pylint: disable=unused-argument
-#         function_scope_messages_aggregator,
-#         database,
-#         kraken_demo_api_key,
-#         kraken_demo_api_secret,
-#         kraken_demo_base_uri,
-# ):
-#     return create_test_kraken(
-#         name='kraken',
-#         api_key=
-#         database=database,
-#         msg_aggregator=function_scope_messages_aggregator,
-#     )
+@pytest.fixture(name='demo_kraken_futures')
+def fixture_demo_kraken_futures(
+        function_scope_messages_aggregator,
+        database,
+        kraken_demo_api_key,
+        kraken_demo_api_secret,
+):
+    return Kraken(
+        name='demo_kraken',
+        api_key=kraken_demo_api_key,
+        secret=kraken_demo_api_secret,
+        database=database,
+        msg_aggregator=function_scope_messages_aggregator,
+    )

@@ -137,6 +137,10 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
             f'code: {response.status_code}')
 
     try:
+        log.debug(f'KRAKEN FUTURES RESPONSE: {response}')
+        log.debug(f'KRAKEN FUTURES RESPONSE: {response.text}')
+        log.debug(f'KRAKEN FUTURES RESPONSE: {response.content}')
+        log.debug(f'KRAKEN FUTURES RESPONSE: {response.raw}')
         decoded_json = jsonloads_dict(response.text)
     except json.decoder.JSONDecodeError as e:
         raise RemoteError(f'Invalid JSON in Kraken response. {e}') from e
@@ -240,30 +244,39 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action('accounts')
+        valid, msg = self._validate_single_api_key_action(KRAKEN_FUTURES_BASE_URL, 'accounts')
         if not valid:
             return False, msg
+        valid, msg = self._validate_single_api_key_action(KRAKEN_BASE_URL, 'Balance')
+        if not valid:
+            log.debug('Futures API key is valid for spot balances')
+            return False, msg
         valid, msg = self._validate_single_api_key_action(
+            KRAKEN_BASE_URL,
             method_str='TradesHistory',
             req={'start': 0, 'end': 0},
         )
         if not valid:
+            log.debug('Futures API key is valid for spot trade history')
             return False, msg
         valid, msg = self._validate_single_api_key_action(
+            KRAKEN_BASE_URL,
             method_str='Ledgers',
             req={'start': 0, 'end': 0, 'type': 'deposit'},
         )
         if not valid:
+            log.debug('Futures API key is valid for spot ledgers')
             return False, msg
         return True, ''
 
     def _validate_single_api_key_action(
             self,
-            method_str: Literal['Balance', 'TradesHistory', 'Ledgers','accounts'],
+            base_url: str,
+            method_str: Literal['Balance', 'TradesHistory', 'Ledgers', 'accounts'],
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         try:
-            self.api_query(KRAKEN_FUTURES_BASE_URL, method_str, req)
+            self.api_query(base_url, method_str, req)
         except (RemoteError, ValueError) as e:
             error = str(e)
             if 'Incorrect padding' in error:
@@ -325,8 +338,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 data=req,
                 call_counter=self.call_counter,
             )
-            result = self._query_private_or_futures(base_url, method, req)
-            log.debug(f'Kraken API query result: {result}')
+            if 'futures' in base_url:
+                result = self._query_futures(method, req)
+            else:
+                result = self._query_private(method, req)
             if isinstance(result, str):
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
@@ -345,11 +360,18 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             f'After {KRAKEN_QUERY_TRIES} kraken queries for {method} could still not be completed',
         )
 
+    def _query_private(self, method: str, req: dict | None = None) -> dict | str:
+        """API queries that require a valid key/secret pair.
 
-    def _query_api(self, base_url: str, urlpath: str, method: str, req: dict | None):
+        Arguments:
+        method -- API method name (string, no default)
+        req    -- additional API request parameters (default: {})
+
+        """
         if req is None:
             req = {}
 
+        urlpath = '/' + KRAKEN_API_VERSION + '/private/' + method
         req['nonce'] = int(1000 * time.time())
         post_data = urlencode(req)
         # any unicode strings must be turned to bytes
@@ -360,15 +382,12 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             digest_algorithm=hashlib.sha512,
         )
         self.session.headers.update({
-            'Authent': signature,
+            'API-Sign': signature,
         })
-        log.debug(f'SESSION HEADERs: {self.session.headers}')
         try:
-            final_url = base_url + urlpath
-            log.debug(f'MAKING QUERY TO {final_url}')
-            # response = self.session.post(
-            response = self.session.get(
-                final_url,
+            response = self.session.post(
+                KRAKEN_BASE_URL + urlpath,
+                data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
             log.debug(f'response from Kraken Futures API: {response}')
@@ -378,8 +397,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
         return _check_and_get_response(response, method)
 
-    # TODO: split into different functions?
-    def _query_private_or_futures(self, base_url: str, method: str, req: dict | None = None) -> dict | str:
+    def _query_futures(self, method: str, req: dict | None = None) -> dict | str:
         """API queries that require a valid key/secret pair.
 
         Arguments:
@@ -387,22 +405,44 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         req    -- additional API request parameters (default: {})
 
         """
+        if req is None:
+            req = {}
 
-        if 'futures' in base_url:
-            urlpath = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method)
-        else:
-            urlpath = os.path.join('/', KRAKEN_API_VERSION, '/private/', method)
+        urlpath: str = '/' + KRAKEN_FUTURES_API_VERSION + '/' + method
 
-        self._query_api(base_url, urlpath, method, req)
+        req['nonce'] = int(1000 * time.time())
+        post_data = urlencode(req)
+        # any unicode strings must be turned to bytes
+        hashable = (post_data + str(req['nonce']) + urlpath).encode()
+        message = hashlib.sha256(hashable).digest()
+        signature = self.generate_hmac_b64_signature(
+            message=message,
+            digest_algorithm=hashlib.sha512,
+        )
+        self.session.headers.update({
+            'Authent': signature,
+        })
+        try:
+            response = self.session.get(
+                KRAKEN_FUTURES_BASE_URL + urlpath,
+                data=post_data.encode(),
+                timeout=CachedSettings().get_timeout_tuple(),
+            )
+            log.debug(f'response from Kraken Futures API: {response}')
+        except requests.exceptions.RequestException as e:
+            raise RemoteError(f'Kraken API request failed due to {e!s}') from e
+        self._manage_call_counter(method)
+
+        return _check_and_get_response(response, method)
 
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
     def query_balances(self) -> ExchangeQueryBalances:
         try:
-            # kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
-            kraken_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, 'accounts', req={})
-            # kraken_futures_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION, 'accounts', req={})
+            kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
+            kraken_futures_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, 'accounts', req={})
+            log.info(f'got kraken ftures balances for {kraken_futures_balances}')
         except RemoteError as e:
             if "Missing key: 'result'" in str(e):
                 # handle https://github.com/rotki/rotki/issues/946
