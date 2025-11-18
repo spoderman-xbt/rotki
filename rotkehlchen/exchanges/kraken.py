@@ -346,10 +346,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 data=req,
                 call_counter=self.call_counter,
             )
-            # if 'futures' in base_url:
-            #     result = self._query_futures(method, req)
-            # else:
-            result = self._query_private(method, req)
+            if 'futures' in base_url:
+                result = self._query_futures(method, req)
+            else:
+                result = self._query_private(method, req)
             if isinstance(result, str) and result != 'success':
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
@@ -379,7 +379,43 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         if req is None:
             req = {}
 
-        urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method)
+        urlpath = '/' + KRAKEN_API_VERSION + '/private/' + method
+        req['nonce'] = int(1000 * time.time())
+        post_data = urlencode(req)
+        # any unicode strings must be turned to bytes
+        hashable = (str(req['nonce']) + post_data).encode()
+        message = urlpath.encode() + hashlib.sha256(hashable).digest()
+        signature = self.generate_hmac_b64_signature(
+            message=message,
+            digest_algorithm=hashlib.sha512,
+        )
+        self.session.headers.update({
+            'API-Sign': signature,
+        })
+        try:
+            response = self.session.post(
+                KRAKEN_BASE_URL + urlpath,
+                data=post_data.encode(),
+                timeout=CachedSettings().get_timeout_tuple(),
+            )
+        except requests.exceptions.RequestException as e:
+            raise RemoteError(f'Kraken API request failed due to {e!s}') from e
+        self._manage_call_counter(method)
+
+        return _check_and_get_response(response, method)
+
+    def _query_futures(self, method: str, req: dict | None = None) -> dict | str:
+        """API queries that require a valid key/secret pair.
+
+        Arguments:
+        method -- API method name (string, no default)
+        req    -- additional API request parameters (default: {})
+
+        """
+        if req is None:
+            req = {}
+
+        urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method if method is not None else "")
         urlpath_without_prefix = urlpath.removeprefix("/derivatives")  # TODO: Could prob make nicer in setup/constants
 
         req['nonce'] = str(int(1000 * time.time()))
