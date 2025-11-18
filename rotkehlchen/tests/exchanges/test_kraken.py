@@ -1,3 +1,4 @@
+import os
 import warnings as test_warnings
 from contextlib import ExitStack
 from http import HTTPStatus
@@ -166,6 +167,16 @@ def test_coverage_of_kraken_balances():
             f'Please update KRAKEN_DELISTED constant.',
         ))
 
+# @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
+# def test_gemini_validate_key(sandbox_gemini):
+#     """Test that validate api key works for a correct api key
+#
+#     Uses the Gemini sandbox
+#     """
+#     result, msg = sandbox_gemini.validate_api_key()
+#     assert result is True
+#     assert msg == ''
+#
 
 def test_querying_balances(kraken: MockKraken):
     kraken.use_original_kraken = True

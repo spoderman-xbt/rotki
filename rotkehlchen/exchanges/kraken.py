@@ -240,7 +240,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action('Balance')
+        valid, msg = self._validate_single_api_key_action('accounts')
         if not valid:
             return False, msg
         valid, msg = self._validate_single_api_key_action(
@@ -259,7 +259,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
     def _validate_single_api_key_action(
             self,
-            method_str: Literal['Balance', 'TradesHistory', 'Ledgers'],
+            method_str: Literal['Balance', 'TradesHistory', 'Ledgers','accounts'],
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         try:
@@ -360,8 +360,9 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             digest_algorithm=hashlib.sha512,
         )
         self.session.headers.update({
-            'API-Sign': signature,
+            'Authent': signature,
         })
+        log.debug(f'SESSION HEADERs: {self.session.headers}')
         try:
             final_url = base_url + urlpath
             log.debug(f'MAKING QUERY TO {final_url}')
