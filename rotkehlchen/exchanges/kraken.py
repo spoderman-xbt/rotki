@@ -376,53 +376,33 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         req    -- additional API request parameters (default: {})
 
         """
-        import time
-        import base64
+        if req is None:
+            req = {}
 
         urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method)
         urlpath_without_prefix = urlpath.removeprefix("/derivatives")  # TODO: Could prob make nicer in setup/constants
 
-        # Generate nonce as current timestamp in milliseconds
-        nonce = str(int(time.time() * 1000))
+        req['nonce'] = str(int(1000 * time.time()))
+        # post_data = urlencode(req)
+        post_data = ""
 
-        # For GET requests, postData is empty
-        postData = ""
-
-        # Step 1: Concatenate postData + nonce + endpointPath
-        hashable = (postData + nonce + urlpath_without_prefix).encode()
-
-        # Step 2: Hash with SHA-256
+        # any unicode strings must be turned to bytes
+        hashable = (post_data + req['nonce'] + urlpath_without_prefix).encode()
         message = hashlib.sha256(hashable).digest()
-
-        # Step 3: Base64-decode the API secret
-        secret_decoded = self.secret
-
-        # Step 4: HMAC-SHA-512 with decoded secret
-        signature = hmac.new(secret_decoded, message, hashlib.sha512).digest()
-
-        # Step 5: Base64-encode the signature
-        authent = base64.b64encode(signature).decode()
-
-        # Set headers - note APIKey is required!
+        signature = self.generate_hmac_b64_signature(
+            message=message,
+            digest_algorithm=hashlib.sha512,
+        )
         self.session.headers.update({
             'APIKey': self.api_key,
-            'Nonce': nonce,
-            'Authent': authent,
+            'Nonce': req['nonce'],
+            'Authent': signature,
         })
-
-        final_path = KRAKEN_FUTURES_BASE_URL + urlpath
-        log.debug(f'final path: {final_path}')
-        import http.client as http_client
-        http_client.HTTPConnection.debuglevel = 1
-        requests_log = logging.getLogger("requests.packages.urllib3")
-        requests_log.setLevel(logging.DEBUG)
-        requests_log.propagate = True
-        requests2_log = logging.getLogger("requests.Session")
-        requests2_log.setLevel(logging.DEBUG)
-        requests2_log.propagate = True
         try:
+            full_url = KRAKEN_FUTURES_BASE_URL + urlpath
+            log.debug(f'Querying Kraken for {method} with {req} at URL: {full_url}')
             response = self.session.get(
-                final_path,
+                full_url,
                 timeout=CachedSettings().get_timeout_tuple(),
             )
         except requests.exceptions.RequestException as e:
