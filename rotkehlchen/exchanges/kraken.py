@@ -240,7 +240,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action('accounts')
+        valid, msg = self._validate_single_api_key_action('Balance')
         if not valid:
             return False, msg
         valid, msg = self._validate_single_api_key_action(
@@ -281,7 +281,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             # else
             log.error(f'Kraken API key validation error: {e!s}')
             msg = (
-                'Unknown error at Kraken API key validation. Perhaps API Key/Secret combination invalid?'  # noqa E501
+                'Unknown error at Kraken API key validation. Perhaps API Key/Secret combination invalid?'  # noqa: E501
             )
             return False, msg
         return True, ''
@@ -345,8 +345,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             f'After {KRAKEN_QUERY_TRIES} kraken queries for {method} could still not be completed',
         )
 
-        # full_path = os.path.join(KRAKEN_FUTURES_BASE_URL, urlpath)
-        # urlpath = os.path.join('/' + KRAKEN_FUTURES_API_VERSION + method)
 
     def _query_api(self, base_url: str, urlpath: str, method: str, req: dict | None):
         if req is None:

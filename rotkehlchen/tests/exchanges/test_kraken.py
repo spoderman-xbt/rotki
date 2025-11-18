@@ -167,7 +167,7 @@ def test_coverage_of_kraken_balances():
         ))
 
 
-def test_querying_balances(kraken):
+def test_querying_balances(kraken: MockKraken):
     kraken.use_original_kraken = True
     result, error_or_empty = kraken.query_balances()
     assert error_or_empty == ''
