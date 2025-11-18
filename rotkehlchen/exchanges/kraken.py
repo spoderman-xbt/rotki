@@ -2,6 +2,7 @@
 # https://github.com/zertrin/clikraken/tree/master/src/clikraken
 import base64
 import hashlib
+import hmac
 import itertools
 import json
 import logging
@@ -349,7 +350,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             #     result = self._query_futures(method, req)
             # else:
             result = self._query_private(method, req)
-            if isinstance(result, str):
+            if isinstance(result, str) and result != 'success':
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
                 log.debug(
@@ -375,26 +376,40 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         req    -- additional API request parameters (default: {})
 
         """
+        import time
+        import base64
+
         urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method)
         urlpath_without_prefix = urlpath.removeprefix("/derivatives")  # TODO: Could prob make nicer in setup/constants
 
-        # any unicode strings must be turned to bytes
-        query_str = ""
-        nonce = ""
-        body_str = ""
-        headers = {}
-        if len(nonce) > 0:
-            self.session.headers.update({"Nonce" : nonce})
+        # Generate nonce as current timestamp in milliseconds
+        nonce = str(int(time.time() * 1000))
 
-        hashable = (query_str + body_str + nonce + urlpath_without_prefix).encode()
+        # For GET requests, postData is empty
+        postData = ""
+
+        # Step 1: Concatenate postData + nonce + endpointPath
+        hashable = (postData + nonce + urlpath_without_prefix).encode()
+
+        # Step 2: Hash with SHA-256
         message = hashlib.sha256(hashable).digest()
-        signature = self.generate_hmac_b64_signature(
-            message=message,
-            digest_algorithm=hashlib.sha512,
-        )
+
+        # Step 3: Base64-decode the API secret
+        secret_decoded = self.secret
+
+        # Step 4: HMAC-SHA-512 with decoded secret
+        signature = hmac.new(secret_decoded, message, hashlib.sha512).digest()
+
+        # Step 5: Base64-encode the signature
+        authent = base64.b64encode(signature).decode()
+
+        # Set headers - note APIKey is required!
         self.session.headers.update({
-            'Authent': signature,
+            'APIKey': self.api_key,
+            'Nonce': nonce,
+            'Authent': authent,
         })
+
         final_path = KRAKEN_FUTURES_BASE_URL + urlpath
         log.debug(f'final path: {final_path}')
         import http.client as http_client
@@ -408,7 +423,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         try:
             response = self.session.get(
                 final_path,
-                data="".encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
         except requests.exceptions.RequestException as e:
