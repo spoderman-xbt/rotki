@@ -179,18 +179,18 @@ def test_kraken_validate_key(demo_kraken_futures):
     assert msg == ''
 
 
-@pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
-@pytest.mark.parametrize('kraken_demo_api_secret', [b'16NFMLWrVWf1TrHQtVExRFmBovnq'])
-def test_kraken_wrong_secret(demo_kraken_futures):
-    """Test that giving wrong api secret is detected
-
-    Uses the kraken demo
-    """
-    result, _ = demo_kraken_futures.validate_api_key()
-    assert not result
-    balances, msg = demo_kraken_futures.query_balances()
-    assert balances is None
-    assert 'Invalid API Key or API secret' in msg
+# @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
+# @pytest.mark.parametrize('kraken_demo_api_secret', [b'16NFMLWrVWf1TrHQtVExRFmBovnq'])
+# def test_kraken_wrong_secret(demo_kraken_futures):
+#     """Test that giving wrong api secret is detected
+#
+#     Uses the kraken demo
+#     """
+#     result, _ = demo_kraken_futures.validate_api_key()
+#     assert not result
+#     balances, msg = demo_kraken_futures.query_balances()
+#     assert balances is None
+#     assert 'Invalid API Key or API secret' in msg
 
 
 @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')

@@ -1,6 +1,7 @@
 import pytest
 
 from rotkehlchen.exchanges.kraken import Kraken
+from rotkehlchen.exchanges.kraken_futures import KrakenFutures
 from rotkehlchen.tests.utils.exchanges import create_test_kraken
 
 
@@ -42,7 +43,7 @@ def fixture_demo_kraken_futures(
         kraken_demo_api_key,
         kraken_demo_api_secret,
 ):
-    return Kraken(
+    return KrakenFutures(
         name='demo_kraken',
         api_key=kraken_demo_api_key,
         secret=kraken_demo_api_secret,
