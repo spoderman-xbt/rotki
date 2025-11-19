@@ -19,7 +19,7 @@ from rotkehlchen.chain.bitcoin.manager import BitcoinCommonManager
 from rotkehlchen.chain.bitcoin.types import BitcoinTx, BtcApiCallback, BtcTxIO, BtcTxIODirection
 from rotkehlchen.chain.bitcoin.utils import (
     query_blockstream_like_balances,
-    query_blockstream_like_has_transactions,
+    query_blockstream_like_has_transactions, query_blockstream_like_blockheight,
 )
 from rotkehlchen.constants.assets import A_BTC
 from rotkehlchen.db.cache import DBCacheDynamic
@@ -294,125 +294,42 @@ class BitcoinManager(BitcoinCommonManager):
             multi_io=multi_io,
         )
 
-    # def set_mempool_api(self, endpoint: str) -> tuple[bool, str]:
-    def set_custom_mempool_api(self, endpoint: str) -> None:
+    def set_custom_mempool_api(self, endpoint: str) -> tuple[bool, str]:
         """
         TODO
         """
 
-        # if we don't have this can we not removE?
-        # if endpoint == '':
-        #     log.debug(f'{self.chain} removing own node at endpoint: {self.own_rpc_endpoint}')
-        #     self.available_node_attributes_map.pop(own_node, None)
-        #     self._set_available_nodes_call_order()
-        #     self.own_rpc_endpoint = ''
-        #     return True, ''
-
-        # result, message = self._connect_node(
-        #     node=endpoint,
-        #     endpoint=self._format_own_rpc_endpoint(endpoint),
-        # )
-        # if result is True:
-
         if endpoint == '':  # i.e. we are deleting the custom endpoint
+            log.debug(f'{self.blockchain} removing own node at endpoint: {endpoint}')
             self.api_callbacks = self.get_default_api_callbacks()
+            return True, ''
         else:
             if not endpoint.rstrip('/').endswith('api'):
                 endpoint = os.path.join(endpoint, 'api')
-            self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
+            is_connected, msg = self._connect_node(endpoint)
+            if is_connected:
+                self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
+                return True, ''
 
-        # return result, message
+        return is_connected, msg
 
-    @staticmethod
-    def _connect_node(
-            self,
-            endpoint: str,
-    ) -> tuple[bool, str]:
-        """Attempt to connect to a node, check its status and store its
-        attributes (e.g. interface, weight) in the available nodes map.
-TODO
+    def _connect_node(self, endpoint: str) -> tuple[bool, str]:
+        """Attempt to connect to a node, check its blockheight
+
         May raise:
         - RemoteError: connecting to a node fails at any of the steps executed.
         """
-
-        last_block = self._check_node_synchronization(endpoint)
-            return False, message
-
-        log.info(f'{self.chain} connected to {endpoint} at blockheight {last_block}')
-        return True, ''
-
-    @staticmethod
-    def _check_node_synchronization(self, endpoint: str) -> BlockNumber:
-        """Check the node synchronization comparing the last block obtained via
-        the node interface against the last block obtained via Subscan API.
-        Return the last block obtained via the node interface.
-
-TODO
-        May raise:
-        - RemoteError: the last block/chain metadata requests fail or
-        there is an error deserializing the chain metadata.
-        """
-        # Last block via custom endpoint
         try:
-            last_block = self.query_blockstream_like_blockheight(endpoint)
+            last_block = query_blockstream_like_blockheight(endpoint)
         except RemoteError as e:
             message = (
-                f'{self.chain} failed to connect to {endpoint}'
+                f'{self.blockchain} failed to connect to {endpoint}'
                 f'due to {e!s}.'
             )
+            return False, message
 
-        # Last block via Subscan API
-        try:
-            default_last_block = self.query_blockstream_like_blockheight(MEMPOOL_SPACE_BASE_URL)
-        except RemoteError:
-            log.warning(
-                f'Unable to verify that {self.chain} node at endpoint {node_interface.url} '
-                f'is synced with the chain. Balances and other queries may be incorrect.',
-            )
-            return last_block
-
-        if metadata_last_block - last_block > SUBSTRATE_BLOCKS_THRESHOLD:
-            self.msg_aggregator.add_warning(
-                f'Found that {self.chain} node at endpoint {node_interface.url} '
-                f'is not synced with the chain. Node last block is {last_block}, '
-                f'expected last block is {metadata_last_block}. '
-                f'Balances and other queries may be incorrect.',
-            )
-
-        return last_block
-
-    @staticmethod
-    def _get_last_block(self, node_interface: SubstrateInterface) -> BlockNumber:
-        """Return the chain height.
-
-        May raise:
-        - RemoteError if there is an error
-        """
-        log.debug(f'{self.chain} querying last block', url=node_interface.url)
-        try:
-            last_block = node_interface.get_block_number(
-                block_hash=node_interface.get_chain_head(),
-            )
-            if last_block is None:  # For some reason a node can rarely return None as last block
-                raise SubstrateRequestException(
-                    f'{self.chain} node failed to request last block. Returned None',
-                )
-        except (
-                requests.exceptions.RequestException,
-                SubstrateRequestException,
-                WebSocketException,
-                ValueError,
-                AttributeError,
-        ) as e:
-            message = (
-                f'{self.chain} failed to request last block '
-                f'at endpoint: {node_interface.url} due to: {e!s}.'
-            )
-            log.error(message)
-            raise RemoteError(message) from e
-
-        log.debug(f'{self.chain} last block', last_block=last_block)
-        return BlockNumber(last_block)
+        log.info(f'{self.blockchain} connected to {endpoint} at blockheight {last_block}')
+        return True, ''
 
     @staticmethod
     def deserialize_tx_io_from_blockcypher(
