@@ -474,7 +474,7 @@ class Rotkehlchen:
             ),
             bitcoin_manager=BitcoinManager(
                 database=self.data.db,
-                own_rpc_endpoint=settings.btc_mempool_apis,
+                custom_btc_mempool_api=CachedSettings().get_entry('btc_mempool_apis')  # TODO: Make like KSM AND DOT?
             ),
             bitcoin_cash_manager=BitcoinCashManager(database=self.data.db),
             solana_manager=SolanaManager(

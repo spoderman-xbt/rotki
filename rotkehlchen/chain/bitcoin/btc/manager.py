@@ -45,11 +45,11 @@ BlockNumber = NewType('BlockNumber', int)
 
 class BitcoinManager(BitcoinCommonManager):
 
-    def __init__(self, database: 'DBHandler', own_rpc_endpoint) -> None:
+    def __init__(self, database: 'DBHandler', custom_btc_mempool_api) -> None:
+        log.debug(f'CUSTOM MEMPOOL API: {custom_btc_mempool_api}')
         api_callbacks: list[BtcApiCallback]
-        mempool_setting = CachedSettings().get_entry('btc_mempool_apis')
-        if mempool_setting is not None and mempool_setting != '':
-            api_callbacks = self.get_custom_mempool_api_callbacks(mempool_setting)
+        if custom_btc_mempool_api is not None and custom_btc_mempool_api != '':
+            api_callbacks = self.get_custom_mempool_api_callbacks(custom_btc_mempool_api)
         else:
             api_callbacks = self.get_default_api_callbacks()
         super().__init__(

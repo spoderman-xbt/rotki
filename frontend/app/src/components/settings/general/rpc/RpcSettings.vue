@@ -48,8 +48,8 @@ const rpcSettingTabs = computed<RpcSettingTab[]>(() => [
     chain: Blockchain.BTC,
     id: 'btc_mempool_space',
     name: 'Bitcoin Mempool',
-    setting: 'btc_mempool_apis',
     component: defineAsyncComponent(() => import('@/components/settings/general/rpc/simple/SimpleRpcNodeManager.vue')),
+    setting: 'btcMempoolApis',
     image: getPublicServiceImagePath('mempool.png'),
   },
   {

@@ -112,6 +112,7 @@ STRING_KEYS = (
     'ksm_rpc_endpoint',
     'dot_rpc_endpoint',
     'beacon_rpc_endpoint',
+    'btc_mempool_apis'
     'date_display_format',
     'frontend_settings',
     'csv_export_delimiter',
@@ -131,6 +132,7 @@ CachedDBSettingsFieldNames = Literal[
     'ksm_rpc_endpoint',
     'dot_rpc_endpoint',
     'beacon_rpc_endpoint',
+    'btc_mempool_apis',
     'main_currency',
     'date_display_format',
     'submit_usage_analytics',
@@ -161,7 +163,6 @@ CachedDBSettingsFieldNames = Literal[
     'auto_delete_calendar_entries',
     'auto_create_calendar_reminders',
     'ask_user_upon_size_discrepancy',
-    'btc_mempool_apis'
 ]
 
 DBSettingsFieldTypes = (
@@ -192,6 +193,7 @@ class DBSettings:
     ksm_rpc_endpoint: str = 'http://localhost:9933'
     dot_rpc_endpoint: str = ''  # same as kusama -- must be set by user
     beacon_rpc_endpoint: str = ''  # must be set by user
+    btc_mempool_apis: str = ''
     main_currency: Asset = DEFAULT_MAIN_CURRENCY
     date_display_format: str = DEFAULT_DATE_DISPLAY_FORMAT
     submit_usage_analytics: bool = DEFAULT_SUBMIT_USAGE_ANALYTICS
@@ -224,7 +226,6 @@ class DBSettings:
     ask_user_upon_size_discrepancy: bool = DEFAULT_ASK_USER_UPON_SIZE_DISCREPANCY
     auto_detect_tokens: bool = DEFAULT_AUTO_DETECT_TOKENS
     csv_export_delimiter: str = DEFAULT_CSV_EXPORT_DELIMITER
-    btc_mempool_apis: str = ''
 
     def serialize(self) -> dict[str, Any]:
         settings_dict = {}
