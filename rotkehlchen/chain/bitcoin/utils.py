@@ -17,7 +17,7 @@ from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import ensure_type
 from rotkehlchen.types import BTCAddress
 from rotkehlchen.utils.misc import satoshis_to_btc
-from rotkehlchen.utils.network import request_get_dict, request_get, retry_calls
+from rotkehlchen.utils.network import request_get_dict, retry_calls
 from ..substrate.types import BlockNumber
 from ...constants import GLOBAL_REQUESTS_TIMEOUT
 from ...db.settings import CachedSettings
@@ -304,7 +304,6 @@ def query_blockstream_like_balances(
         accounts: Sequence[BTCAddress],
 ) -> dict[BTCAddress, FVal]:
     """Query balances from APIs similar to blockstream.info"""
-    log.debug(f'Querying f{base_url} for balances')
     balances = {}
     for account in accounts:
         balance, _ = query_blockstream_like_account_info(base_url, account)

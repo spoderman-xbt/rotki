@@ -1,5 +1,4 @@
 import logging
-import os
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -19,18 +18,13 @@ from rotkehlchen.chain.bitcoin.types import (
     BtcQueryAction,
     BtcTxIODirection,
 )
-from rotkehlchen.chain.bitcoin.utils import (
-    OpCodes,
-    query_blockstream_like_balances,
-    query_blockstream_like_has_transactions,
-)
+from rotkehlchen.chain.bitcoin.utils import OpCodes
 from rotkehlchen.chain.decoding.utils import decode_transfer_direction
 from rotkehlchen.chain.manager import ChainManagerWithTransactions
 from rotkehlchen.constants.misc import ZERO
 from rotkehlchen.db.cache import DBCacheDynamic
 from rotkehlchen.db.history_events import DBHistoryEvents
-from rotkehlchen.db.settings import CachedSettings
-from rotkehlchen.errors.misc import InputError, RemoteError, UnableToDecryptRemoteData
+from rotkehlchen.errors.misc import RemoteError, UnableToDecryptRemoteData
 from rotkehlchen.errors.serialization import DeserializationError
 from rotkehlchen.fval import FVal
 from rotkehlchen.history.events.structures.base import HistoryEvent
@@ -41,7 +35,6 @@ from rotkehlchen.types import BTCAddress, Location, SupportedBlockchain, Timesta
 from rotkehlchen.utils.misc import ts_now, ts_sec_to_ms
 
 if TYPE_CHECKING:
-    from rotkehlchen.chain.evm.types import WeightedNode
     from rotkehlchen.db.dbhandler import DBHandler
 
 logger = logging.getLogger(__name__)
@@ -122,7 +115,7 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
         """
         errors: dict[str, str] = {}
         for callback in self.api_callbacks:
-            log.debug(f'Querying {callback.name} for address balances')
+            log.debug(f'Querying {callback.name} for {self.blockchain} address balances')
             try:
                 if action == BtcQueryAction.BALANCES and callback.balances_fn is not None:
                     return callback.balances_fn(accounts)

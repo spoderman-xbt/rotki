@@ -319,7 +319,6 @@ def db_settings_from_dict(
 ) -> DBSettings:
     specified_args: dict[str, Any] = {}
     for key, value in settings_dict.items():
-        log.debug(f'checking if key {key} is in STRING_KEYS {STRING_KEYS}')
         if key in BOOLEAN_KEYS:
             specified_args[key] = read_boolean(value)
         elif key in INTEGER_KEYS:

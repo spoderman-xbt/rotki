@@ -105,7 +105,6 @@ from rotkehlchen.chain.evm.types import (
     RemoteDataQueryStatus,
     WeightedNode,
 )
-from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
 from rotkehlchen.chain.zksync_lite.constants import ZKL_IDENTIFIER
 from rotkehlchen.constants import HOUR_IN_SECONDS, ONE
 from rotkehlchen.constants.limits import (
@@ -309,6 +308,7 @@ if TYPE_CHECKING:
     from rotkehlchen.chain.evm.accounting.structures import BaseEventSettings
     from rotkehlchen.chain.evm.manager import EvmManager
     from rotkehlchen.chain.evm.node_inquirer import EvmNodeInquirer
+    from rotkehlchen.chain.manager import ChainManagerWithNodesMixin
     from rotkehlchen.db.dbhandler import DBHandler
     from rotkehlchen.db.drivers.gevent import DBCursor
     from rotkehlchen.exchanges.kraken import KrakenAccountType
@@ -2571,21 +2571,19 @@ class RestAPI:
             only_active=True,
         )
 
-        manager = self.rotkehlchen.chains_aggregator.get_chain_manager(
+        manager: ChainManagerWithNodesMixin = self.rotkehlchen.chains_aggregator.get_chain_manager(  # type: ignore  # will be manager with nodes
             blockchain=node.node_info.blockchain,
         )
-        if isinstance(manager, ChainManagerWithNodesMixin):
-            for entry in list(manager.node_inquirer.rpc_mapping):  # remove old node from memory
-                if entry.endpoint == old_endpoint:
-                    manager.node_inquirer.rpc_mapping.pop(entry, None)
-                    break
-            else:
-                log.debug(
-                    f'Failed to find node with endpoint {old_endpoint} in web3 mappings. Skipping',
-                )
+        for entry in list(manager.node_inquirer.rpc_mapping):  # remove old node from memory
+            if entry.endpoint == old_endpoint:
+                manager.node_inquirer.rpc_mapping.pop(entry, None)
+                break
+        else:
+            log.debug(
+                f'Failed to find node with endpoint {old_endpoint} in web3 mappings. Skipping',
+            )
 
-            manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
-
+        manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
         return api_response(OK_RESULT, status_code=HTTPStatus.OK)
 
     def delete_rpc_node(self, identifier: int, blockchain: SupportedBlockchain) -> Response:
@@ -2600,9 +2598,7 @@ class RestAPI:
             only_active=True,
         )
         manager = self.rotkehlchen.chains_aggregator.get_chain_manager(blockchain)  # type: ignore
-        if isinstance(manager, ChainManagerWithNodesMixin):
-            manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
-
+        manager.node_inquirer.connect_to_multiple_nodes(nodes_to_connect)
         return api_response(OK_RESULT, status_code=HTTPStatus.OK)
 
     @async_api_call()
