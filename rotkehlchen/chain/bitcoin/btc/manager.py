@@ -49,7 +49,7 @@ class BitcoinManager(BitcoinCommonManager):
 
     def __init__(self, database: 'DBHandler') -> None:
         api_callbacks: list[BtcApiCallback]
-        custom_btc_mempool_api = CachedSettings().get_entry('btc_mempool_apis')
+        custom_btc_mempool_api = CachedSettings().get_entry('btc_mempool_api')
         if custom_btc_mempool_api is not None and custom_btc_mempool_api != '':
             api_callbacks = self.get_custom_mempool_api_callbacks(custom_btc_mempool_api)
         else:

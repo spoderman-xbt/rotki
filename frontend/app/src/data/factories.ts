@@ -33,7 +33,7 @@ export function defaultGeneralSettings(mainCurrency: Currency): GeneralSettings 
     submitUsageAnalytics: Defaults.ANONYMOUS_USAGE_ANALYTICS,
     treatEth2AsEth: false,
     uiFloatingPrecision: Defaults.FLOATING_PRECISION,
-    btcMempoolApis: Defaults.BTC_MEMPOOL_APIS,
+    btcMempoolApi: Defaults.BTC_MEMPOOL_API,
   };
 }
 
