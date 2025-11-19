@@ -472,7 +472,10 @@ class Rotkehlchen:
                 ethereum_inquirer=ethereum_inquirer,
                 database=self.data.db,
             ),
-            bitcoin_manager=BitcoinManager(database=self.data.db),
+            bitcoin_manager=BitcoinManager(
+                database=self.data.db,
+                own_rpc_endpoint=settings.btc_mempool_apis,
+            ),
             bitcoin_cash_manager=BitcoinCashManager(database=self.data.db),
             solana_manager=SolanaManager(
                 node_inquirer=SolanaInquirer(
@@ -1299,6 +1302,11 @@ class Rotkehlchen:
 
         if settings.dot_rpc_endpoint is not None:
             result, msg = self.chains_aggregator.set_dot_rpc_endpoint(settings.dot_rpc_endpoint)
+            if not result:
+                return False, msg
+
+        if settings.btc_mempool_apis is not None:
+            result, msg = self.chains_aggregator.set_btc_mempool_apis(settings.btc_mempool_apis)
             if not result:
                 return False, msg
 

@@ -11,6 +11,7 @@ export const useGeneralSettingsStore = defineStore('settings/general', () => {
   const submitUsageAnalytics = useComputedRef(settings, 'submitUsageAnalytics');
   const ksmRpcEndpoint = useComputedRef(settings, 'ksmRpcEndpoint');
   const dotRpcEndpoint = useComputedRef(settings, 'dotRpcEndpoint');
+  const btcMempoolApis = useComputedRef(settings, 'btcMempoolApis');
   const beaconRpcEndpoint = useComputedRef(settings, 'beaconRpcEndpoint');
   const balanceSaveFrequency = useComputedRef(settings, 'balanceSaveFrequency');
   const dateDisplayFormat = useComputedRef(settings, 'dateDisplayFormat');
@@ -67,6 +68,7 @@ export const useGeneralSettingsStore = defineStore('settings/general', () => {
     dateDisplayFormat,
     displayDateInLocaltime,
     dotRpcEndpoint,
+    btcMempoolApis,
     evmchainsToSkipDetection,
     floatingPrecision: uiFloatingPrecision,
     historicalPriceOracles,

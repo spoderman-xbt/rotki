@@ -36,6 +36,7 @@ export const Defaults = {
   DOT_RPC_ENDPOINT: '', // same as Kusama, must be set by user
   FLOATING_PRECISION: 2,
   KSM_RPC_ENDPOINT: 'http://localhost:9933',
+  BTC_MEMPOOL_APIS: '', // same as Kusama, must be set by user
 } as const;
 
 export const TRADE_LOCATION_EXTERNAL = 'external';

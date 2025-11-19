@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, NewType
 
 from rotkehlchen.chain.bitcoin.btc.constants import (
     BLOCKCHAIN_INFO_BASE_URL,
@@ -22,6 +22,7 @@ from rotkehlchen.chain.bitcoin.utils import (
 )
 from rotkehlchen.constants.assets import A_BTC
 from rotkehlchen.db.cache import DBCacheDynamic
+from rotkehlchen.db.settings import CachedSettings, DBSettings
 from rotkehlchen.fval import FVal
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import (
@@ -40,41 +41,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
 
+BlockNumber = NewType('BlockNumber', int)
 
 class BitcoinManager(BitcoinCommonManager):
 
-    def __init__(self, database: 'DBHandler') -> None:
-        with self.db.conn.read_ctx() as cursor:
-           mempool_setting = database.get_setting(cursor, 'mempool_api')
-           if mempool_setting is not None:
-               api_callbacks = [BtcApiCallback(
-                   name='custom mempool space',
-                   balances_fn=lambda accounts, this_url=url: query_blockstream_like_balances(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
-                   has_transactions_fn=lambda accounts, this_url=url: query_blockstream_like_has_transactions(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
-                   transactions_fn=None,  # this API doesn't handle p2pk txs properly
-               )]
-           else:
-               api_callbacks = [BtcApiCallback(
-                name='blockchain.info',
-                balances_fn=self._query_blockchain_info_balances,
-                has_transactions_fn=self._query_blockchain_info_has_transactions,
-                transactions_fn=self._query_blockchain_info_transactions,
-            ), BtcApiCallback(
-                name='blockstream.info',
-                balances_fn=lambda accounts: query_blockstream_like_balances(base_url=BLOCKSTREAM_BASE_URL, accounts=accounts),  # noqa: E501
-                has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=BLOCKSTREAM_BASE_URL, accounts=accounts),  # noqa: E501
-                transactions_fn=None,  # this API doesn't handle p2pk txs properly
-            ), BtcApiCallback(
-                name='mempool.space',
-                balances_fn=lambda accounts: query_blockstream_like_balances(base_url=MEMPOOL_SPACE_BASE_URL, accounts=accounts),  # noqa: E501
-                has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=MEMPOOL_SPACE_BASE_URL, accounts=accounts),  # noqa: E501
-                transactions_fn=None,  # this API doesn't handle p2pk txs properly
-            ), BtcApiCallback(
-                name='blockcypher.com',
-                balances_fn=None,  # TODO implement blockcypher for all actions
-                has_transactions_fn=None,
-                transactions_fn=self._query_blockcypher_transactions,
-            )]
+    def __init__(self, database: 'DBHandler', own_rpc_endpoint) -> None:
+        api_callbacks: list[BtcApiCallback]
+        mempool_setting = CachedSettings().get_entry('btc_mempool_apis')
+        if mempool_setting is not None and mempool_setting != '':
+            api_callbacks = self.get_custom_mempool_api_callbacks(mempool_setting)
+        else:
+            api_callbacks = self.get_default_api_callbacks()
         super().__init__(
             database=database,
             blockchain=SupportedBlockchain.BITCOIN,
@@ -83,6 +60,29 @@ class BitcoinManager(BitcoinCommonManager):
             cache_key=DBCacheDynamic.LAST_BTC_TX_BLOCK,
             api_callbacks=api_callbacks,
         )
+
+    def get_default_api_callbacks(self) -> list[BtcApiCallback]:
+        return [BtcApiCallback(
+            name='blockchain.info',
+            balances_fn=self._query_blockchain_info_balances,
+            has_transactions_fn=self._query_blockchain_info_has_transactions,
+            transactions_fn=self._query_blockchain_info_transactions,
+        ), BtcApiCallback(
+            name='blockstream.info',
+            balances_fn=lambda accounts: query_blockstream_like_balances(base_url=BLOCKSTREAM_BASE_URL, accounts=accounts),  # noqa: E501
+            has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=BLOCKSTREAM_BASE_URL, accounts=accounts),  # noqa: E501
+            transactions_fn=None,  # this API doesn't handle p2pk txs properly
+        ), BtcApiCallback(
+            name='mempool.space',
+            balances_fn=lambda accounts: query_blockstream_like_balances(base_url=MEMPOOL_SPACE_BASE_URL, accounts=accounts),  # noqa: E501
+            has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=MEMPOOL_SPACE_BASE_URL, accounts=accounts),  # noqa: E501
+            transactions_fn=None,  # this API doesn't handle p2pk txs properly
+        ), BtcApiCallback(
+            name='blockcypher.com',
+            balances_fn=None,  # TODO implement blockcypher for all actions
+            has_transactions_fn=None,
+            transactions_fn=self._query_blockcypher_transactions,
+        )]
 
     @staticmethod
     def _query_blockchain_info(
@@ -292,6 +292,147 @@ class BitcoinManager(BitcoinCommonManager):
             multi_io=multi_io,
         )
 
+    # def set_mempool_api(self, endpoint: str) -> tuple[bool, str]:
+    def set_custom_mempool_api(self, endpoint: str) -> None:
+        """
+        TODO
+        """
+
+        # if we don't have this can we not removE?
+        # if endpoint == '':
+        #     log.debug(f'{self.chain} removing own node at endpoint: {self.own_rpc_endpoint}')
+        #     self.available_node_attributes_map.pop(own_node, None)
+        #     self._set_available_nodes_call_order()
+        #     self.own_rpc_endpoint = ''
+        #     return True, ''
+
+        # result, message = self._connect_node(
+        #     node=endpoint,
+        #     endpoint=self._format_own_rpc_endpoint(endpoint),
+        # )
+        # if result is True:
+        self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
+
+        # return result, message
+
+#     @staticmethod
+#     def _connect_node(
+#             self,
+#             endpoint: str,
+#     ) -> tuple[bool, str]:
+#         """Attempt to connect to a node, check its status and store its
+#         attributes (e.g. interface, weight) in the available nodes map.
+#
+#         May raise:
+#         - RemoteError: connecting to a node fails at any of the steps executed.
+#         """
+#         if node in self.available_node_attributes_map:
+#             message = f'{self.chain} already connected to {node} node at endpoint: {endpoint}.'
+#             return True, message
+#
+#         try:
+#             last_block = self._check_node_synchronization(endpoint)
+#             self._set_chain_properties(node_interface)
+#         except RemoteError as e:
+#             message = (
+#                 f'{self.chain} failed to connect to {node} at endpoint {endpoint}, '
+#                 f'due to {e!s}.'
+#             )
+#             return False, message
+#
+#         log.info(f'{self.chain} connected to {node} node at endpoint: {node_interface.url}.')
+#         node_attributes = NodeNameAttributes(
+#             node_interface=node_interface,
+#             weight_block=last_block,
+#         )
+#         self.available_node_attributes_map[node] = node_attributes
+#         self._set_available_nodes_call_order()
+#         return True, ''
+#
+#     @staticmethod
+#     def _check_node_synchronization(self, endpoint: str) -> BlockNumber:
+#         """Check the node synchronization comparing the last block obtained via
+#         the node interface against the last block obtained via Subscan API.
+#         Return the last block obtained via the node interface.
+#
+# TODO
+#         May raise:
+#         - RemoteError: the last block/chain metadata requests fail or
+#         there is an error deserializing the chain metadata.
+#         """
+#         # Last block via node interface
+#         last_block = self._get_last_block(node_interface=node_interface)
+#
+#         # Last block via Subscan API
+#         try:
+#             chain_metadata = self._request_chain_metadata()
+#         except RemoteError:
+#             log.warning(
+#                 f'Unable to verify that {self.chain} node at endpoint {node_interface.url} '
+#                 f'is synced with the chain. Balances and other queries may be incorrect.',
+#             )
+#             return last_block
+#
+#         # Check node synchronization
+#         try:
+#             metadata_last_block = BlockNumber(
+#                 deserialize_int_from_str(
+#                     symbol=chain_metadata['data']['blockNum'],
+#                     location='subscan api',
+#                 ),
+#             )
+#         except (KeyError, DeserializationError) as e:
+#             message = f'{self.chain} failed to deserialize the chain metadata response: {e!s}.'
+#             log.error(message, chain_metadata=chain_metadata)
+#             raise RemoteError(message) from e
+#
+#         log.debug(
+#             f'{self.chain} subscan API metadata last block',
+#             metadata_last_block=metadata_last_block,
+#         )
+#         if metadata_last_block - last_block > SUBSTRATE_BLOCKS_THRESHOLD:
+#             self.msg_aggregator.add_warning(
+#                 f'Found that {self.chain} node at endpoint {node_interface.url} '
+#                 f'is not synced with the chain. Node last block is {last_block}, '
+#                 f'expected last block is {metadata_last_block}. '
+#                 f'Balances and other queries may be incorrect.',
+#             )
+#
+#         return last_block
+#
+#     @staticmethod
+#     def _get_last_block(self, node_interface: SubstrateInterface) -> BlockNumber:
+#         """Return the chain height.
+#
+#         May raise:
+#         - RemoteError if there is an error
+#         """
+#         log.debug(f'{self.chain} querying last block', url=node_interface.url)
+#         try:
+#             last_block = node_interface.get_block_number(
+#                 block_hash=node_interface.get_chain_head(),
+#             )
+#             if last_block is None:  # For some reason a node can rarely return None as last block
+#                 raise SubstrateRequestException(
+#                     f'{self.chain} node failed to request last block. Returned None',
+#                 )
+#         except (
+#                 requests.exceptions.RequestException,
+#                 SubstrateRequestException,
+#                 WebSocketException,
+#                 ValueError,
+#                 AttributeError,
+#         ) as e:
+#             message = (
+#                 f'{self.chain} failed to request last block '
+#                 f'at endpoint: {node_interface.url} due to: {e!s}.'
+#             )
+#             log.error(message)
+#             raise RemoteError(message) from e
+#
+#         log.debug(f'{self.chain} last block', last_block=last_block)
+#         return BlockNumber(last_block)
+
     @staticmethod
     def deserialize_tx_io_from_blockcypher(
             data: dict[str, Any],
@@ -324,3 +465,11 @@ class BitcoinManager(BitcoinCommonManager):
             address=data.get('addr'),
             direction=direction,
         )
+
+    def get_custom_mempool_api_callbacks(self, mempool_setting):
+        return [BtcApiCallback(
+            name='custom mempool space',
+            balances_fn=lambda accounts: query_blockstream_like_balances(base_url=mempool_setting, accounts=accounts),  # noqa: E501
+            has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=mempool_setting, accounts=accounts),  # noqa: E501
+            transactions_fn=None,  # this API doesn't handle p2pk txs properly
+        )]

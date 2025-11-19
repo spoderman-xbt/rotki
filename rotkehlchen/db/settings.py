@@ -161,6 +161,7 @@ CachedDBSettingsFieldNames = Literal[
     'auto_delete_calendar_entries',
     'auto_create_calendar_reminders',
     'ask_user_upon_size_discrepancy',
+    'btc_mempool_apis'
 ]
 
 DBSettingsFieldTypes = (
@@ -223,6 +224,7 @@ class DBSettings:
     ask_user_upon_size_discrepancy: bool = DEFAULT_ASK_USER_UPON_SIZE_DISCREPANCY
     auto_detect_tokens: bool = DEFAULT_AUTO_DETECT_TOKENS
     csv_export_delimiter: str = DEFAULT_CSV_EXPORT_DELIMITER
+    btc_mempool_apis: str = ''
 
     def serialize(self) -> dict[str, Any]:
         settings_dict = {}
@@ -283,6 +285,7 @@ class ModifiableDBSettings(NamedTuple):
     ask_user_upon_size_discrepancy: bool | None = None
     auto_detect_tokens: bool | None = None
     csv_export_delimiter: str | None = None
+    btc_mempool_apis: str | None = None
 
     def serialize(self) -> dict[str, Any]:
         settings_dict = {}
