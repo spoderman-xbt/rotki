@@ -112,7 +112,7 @@ STRING_KEYS = (
     'ksm_rpc_endpoint',
     'dot_rpc_endpoint',
     'beacon_rpc_endpoint',
-    'btc_mempool_apis'
+    'btc_mempool_apis',
     'date_display_format',
     'frontend_settings',
     'csv_export_delimiter',
@@ -319,6 +319,7 @@ def db_settings_from_dict(
 ) -> DBSettings:
     specified_args: dict[str, Any] = {}
     for key, value in settings_dict.items():
+        log.debug(f'checking if key {key} is in STRING_KEYS {STRING_KEYS}')
         if key in BOOLEAN_KEYS:
             specified_args[key] = read_boolean(value)
         elif key in INTEGER_KEYS:

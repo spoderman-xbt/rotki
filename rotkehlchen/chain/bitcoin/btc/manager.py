@@ -311,7 +311,11 @@ class BitcoinManager(BitcoinCommonManager):
         #     endpoint=self._format_own_rpc_endpoint(endpoint),
         # )
         # if result is True:
-        self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
+        
+        if endpoint == '':  # i.e. we are deleting the custom endpoint
+            self.api_callbacks = self.get_default_api_callbacks()
+        else:
+            self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
 
         # return result, message
 

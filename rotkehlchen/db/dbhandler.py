@@ -637,6 +637,8 @@ class DBHandler:
         for q in cursor:
             settings_dict[q[0]] = q[1]
 
+        log.debug(f'got settings {settings_dict}')
+
         # Also add the non-DB saved settings
         settings_dict['have_premium'] = have_premium
         return db_settings_from_dict(settings_dict, self.msg_aggregator)
