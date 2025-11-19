@@ -133,12 +133,13 @@ class BitcoinCommonManager(ChainManagerWithTransactions[BTCAddress]):
                 if not url.rstrip('/').endswith('api'):
                     url = os.path.join(url, 'api')
                 log.debug(f'Querying custom API {url}')
-                owned_api_callback: BtcApiCallback = BtcApiCallback(
+                owned_api_callback: BtcApiCallback = (
+                    BtcApiCallback(
                     name='custom mempool space',
                     balances_fn=lambda accounts, this_url=url: query_blockstream_like_balances(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
                     has_transactions_fn=lambda accounts, this_url=url: query_blockstream_like_has_transactions(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
                     transactions_fn=None,  # this API doesn't handle p2pk txs properly
-                )
+                ))
                 try:
                     if action == BtcQueryAction.BALANCES and owned_api_callback.balances_fn is not None:  # noqa: E501
                         return owned_api_callback.balances_fn(accounts)

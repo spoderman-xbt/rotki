@@ -44,13 +44,17 @@ log = RotkehlchenLogsAdapter(logger)
 class BitcoinManager(BitcoinCommonManager):
 
     def __init__(self, database: 'DBHandler') -> None:
-        super().__init__(
-            database=database,
-            blockchain=SupportedBlockchain.BITCOIN,
-            asset=A_BTC,
-            group_identifier_prefix=BTC_GROUP_IDENTIFIER_PREFIX,
-            cache_key=DBCacheDynamic.LAST_BTC_TX_BLOCK,
-            api_callbacks=[BtcApiCallback(
+        with self.db.conn.read_ctx() as cursor:
+           mempool_setting = database.get_setting(cursor, 'mempool_api')
+           if mempool_setting is not None:
+               api_callbacks = [BtcApiCallback(
+                   name='custom mempool space',
+                   balances_fn=lambda accounts, this_url=url: query_blockstream_like_balances(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
+                   has_transactions_fn=lambda accounts, this_url=url: query_blockstream_like_has_transactions(base_url=this_url, accounts=accounts),  # type: ignore[misc] # noqa: E501
+                   transactions_fn=None,  # this API doesn't handle p2pk txs properly
+               )]
+           else:
+               api_callbacks = [BtcApiCallback(
                 name='blockchain.info',
                 balances_fn=self._query_blockchain_info_balances,
                 has_transactions_fn=self._query_blockchain_info_has_transactions,
@@ -70,7 +74,14 @@ class BitcoinManager(BitcoinCommonManager):
                 balances_fn=None,  # TODO implement blockcypher for all actions
                 has_transactions_fn=None,
                 transactions_fn=self._query_blockcypher_transactions,
-            )],
+            )]
+        super().__init__(
+            database=database,
+            blockchain=SupportedBlockchain.BITCOIN,
+            asset=A_BTC,
+            group_identifier_prefix=BTC_GROUP_IDENTIFIER_PREFIX,
+            cache_key=DBCacheDynamic.LAST_BTC_TX_BLOCK,
+            api_callbacks=api_callbacks,
         )
 
     @staticmethod
