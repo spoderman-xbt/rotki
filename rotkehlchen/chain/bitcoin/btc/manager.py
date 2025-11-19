@@ -327,8 +327,9 @@ class BitcoinManager(BitcoinCommonManager):
             )
             return False, message
 
-        log.info(f'{self.blockchain} connected to {endpoint} at blockheight {last_block}')
-        return True, ''
+        message = f'{self.blockchain} connected to {endpoint} at blockheight {last_block}'
+        log.info(message)
+        return True, message
 
     @staticmethod
     def deserialize_tx_io_from_blockcypher(

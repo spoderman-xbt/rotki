@@ -1302,7 +1302,7 @@ class Rotkehlchen:
             if not result:
                 return False, msg
 
-        if settings.btc_mempool_apis is not None:
+        if settings.btc_mempool_api is not None:
             result, msg = self.chains_aggregator.set_btc_mempool_api(settings.btc_mempool_api)
             if not result:
                 return False, msg
