@@ -16,6 +16,7 @@ from rotkehlchen.serialization.deserialize import ensure_type
 from rotkehlchen.types import BTCAddress
 from rotkehlchen.utils.misc import satoshis_to_btc
 from rotkehlchen.utils.network import request_get_dict
+from ..substrate.types import BlockNumber
 
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
@@ -226,6 +227,31 @@ def scriptpubkey_to_btc_address(data: bytes) -> BTCAddress:
         return scriptpubkey_to_p2sh_address(data)
 
     return scriptpubkey_to_bech32_address(data)
+
+
+def query_blockstream_like_blockheight(
+        base_url: str,
+) -> BlockNumber:
+    """
+    TODO
+    
+    Query account info from APIs similar to blockstream.info
+    Returns the account balance and tx count in a tuple.
+    May raise:
+    - RemoteError if got problems with querying the API
+    - UnableToDecryptRemoteData if unable to load json in request_get
+    - KeyError if got unexpected json structure
+    - DeserializationError if got unexpected json values
+    """
+    response_data = request_get_dict(
+        url=f'{base_url}/blocks/tip/height',
+        handle_429=True,
+        backoff_in_seconds=4,
+    )
+    log.debug(f'Got response: {response_data} from {base_url}/blocks/tip/height')
+    log.debug(f'Returning {response_data[0]}')
+
+    return BlockNumber(response_data[0])
 
 
 def query_blockstream_like_account_info(

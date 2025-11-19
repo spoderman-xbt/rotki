@@ -1,4 +1,5 @@
 import logging
+import os
 from collections import defaultdict
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, NewType
@@ -23,6 +24,7 @@ from rotkehlchen.chain.bitcoin.utils import (
 from rotkehlchen.constants.assets import A_BTC
 from rotkehlchen.db.cache import DBCacheDynamic
 from rotkehlchen.db.settings import CachedSettings, DBSettings
+from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import (
@@ -311,131 +313,106 @@ class BitcoinManager(BitcoinCommonManager):
         #     endpoint=self._format_own_rpc_endpoint(endpoint),
         # )
         # if result is True:
-        
+
         if endpoint == '':  # i.e. we are deleting the custom endpoint
             self.api_callbacks = self.get_default_api_callbacks()
         else:
+            if not endpoint.rstrip('/').endswith('api'):
+                endpoint = os.path.join(endpoint, 'api')
             self.api_callbacks = self.get_custom_mempool_api_callbacks(endpoint)
 
         # return result, message
 
-#     @staticmethod
-#     def _connect_node(
-#             self,
-#             endpoint: str,
-#     ) -> tuple[bool, str]:
-#         """Attempt to connect to a node, check its status and store its
-#         attributes (e.g. interface, weight) in the available nodes map.
-#
-#         May raise:
-#         - RemoteError: connecting to a node fails at any of the steps executed.
-#         """
-#         if node in self.available_node_attributes_map:
-#             message = f'{self.chain} already connected to {node} node at endpoint: {endpoint}.'
-#             return True, message
-#
-#         try:
-#             last_block = self._check_node_synchronization(endpoint)
-#             self._set_chain_properties(node_interface)
-#         except RemoteError as e:
-#             message = (
-#                 f'{self.chain} failed to connect to {node} at endpoint {endpoint}, '
-#                 f'due to {e!s}.'
-#             )
-#             return False, message
-#
-#         log.info(f'{self.chain} connected to {node} node at endpoint: {node_interface.url}.')
-#         node_attributes = NodeNameAttributes(
-#             node_interface=node_interface,
-#             weight_block=last_block,
-#         )
-#         self.available_node_attributes_map[node] = node_attributes
-#         self._set_available_nodes_call_order()
-#         return True, ''
-#
-#     @staticmethod
-#     def _check_node_synchronization(self, endpoint: str) -> BlockNumber:
-#         """Check the node synchronization comparing the last block obtained via
-#         the node interface against the last block obtained via Subscan API.
-#         Return the last block obtained via the node interface.
-#
-# TODO
-#         May raise:
-#         - RemoteError: the last block/chain metadata requests fail or
-#         there is an error deserializing the chain metadata.
-#         """
-#         # Last block via node interface
-#         last_block = self._get_last_block(node_interface=node_interface)
-#
-#         # Last block via Subscan API
-#         try:
-#             chain_metadata = self._request_chain_metadata()
-#         except RemoteError:
-#             log.warning(
-#                 f'Unable to verify that {self.chain} node at endpoint {node_interface.url} '
-#                 f'is synced with the chain. Balances and other queries may be incorrect.',
-#             )
-#             return last_block
-#
-#         # Check node synchronization
-#         try:
-#             metadata_last_block = BlockNumber(
-#                 deserialize_int_from_str(
-#                     symbol=chain_metadata['data']['blockNum'],
-#                     location='subscan api',
-#                 ),
-#             )
-#         except (KeyError, DeserializationError) as e:
-#             message = f'{self.chain} failed to deserialize the chain metadata response: {e!s}.'
-#             log.error(message, chain_metadata=chain_metadata)
-#             raise RemoteError(message) from e
-#
-#         log.debug(
-#             f'{self.chain} subscan API metadata last block',
-#             metadata_last_block=metadata_last_block,
-#         )
-#         if metadata_last_block - last_block > SUBSTRATE_BLOCKS_THRESHOLD:
-#             self.msg_aggregator.add_warning(
-#                 f'Found that {self.chain} node at endpoint {node_interface.url} '
-#                 f'is not synced with the chain. Node last block is {last_block}, '
-#                 f'expected last block is {metadata_last_block}. '
-#                 f'Balances and other queries may be incorrect.',
-#             )
-#
-#         return last_block
-#
-#     @staticmethod
-#     def _get_last_block(self, node_interface: SubstrateInterface) -> BlockNumber:
-#         """Return the chain height.
-#
-#         May raise:
-#         - RemoteError if there is an error
-#         """
-#         log.debug(f'{self.chain} querying last block', url=node_interface.url)
-#         try:
-#             last_block = node_interface.get_block_number(
-#                 block_hash=node_interface.get_chain_head(),
-#             )
-#             if last_block is None:  # For some reason a node can rarely return None as last block
-#                 raise SubstrateRequestException(
-#                     f'{self.chain} node failed to request last block. Returned None',
-#                 )
-#         except (
-#                 requests.exceptions.RequestException,
-#                 SubstrateRequestException,
-#                 WebSocketException,
-#                 ValueError,
-#                 AttributeError,
-#         ) as e:
-#             message = (
-#                 f'{self.chain} failed to request last block '
-#                 f'at endpoint: {node_interface.url} due to: {e!s}.'
-#             )
-#             log.error(message)
-#             raise RemoteError(message) from e
-#
-#         log.debug(f'{self.chain} last block', last_block=last_block)
-#         return BlockNumber(last_block)
+    @staticmethod
+    def _connect_node(
+            self,
+            endpoint: str,
+    ) -> tuple[bool, str]:
+        """Attempt to connect to a node, check its status and store its
+        attributes (e.g. interface, weight) in the available nodes map.
+TODO
+        May raise:
+        - RemoteError: connecting to a node fails at any of the steps executed.
+        """
+
+        last_block = self._check_node_synchronization(endpoint)
+            return False, message
+
+        log.info(f'{self.chain} connected to {endpoint} at blockheight {last_block}')
+        return True, ''
+
+    @staticmethod
+    def _check_node_synchronization(self, endpoint: str) -> BlockNumber:
+        """Check the node synchronization comparing the last block obtained via
+        the node interface against the last block obtained via Subscan API.
+        Return the last block obtained via the node interface.
+
+TODO
+        May raise:
+        - RemoteError: the last block/chain metadata requests fail or
+        there is an error deserializing the chain metadata.
+        """
+        # Last block via custom endpoint
+        try:
+            last_block = self.query_blockstream_like_blockheight(endpoint)
+        except RemoteError as e:
+            message = (
+                f'{self.chain} failed to connect to {endpoint}'
+                f'due to {e!s}.'
+            )
+
+        # Last block via Subscan API
+        try:
+            default_last_block = self.query_blockstream_like_blockheight(MEMPOOL_SPACE_BASE_URL)
+        except RemoteError:
+            log.warning(
+                f'Unable to verify that {self.chain} node at endpoint {node_interface.url} '
+                f'is synced with the chain. Balances and other queries may be incorrect.',
+            )
+            return last_block
+
+        if metadata_last_block - last_block > SUBSTRATE_BLOCKS_THRESHOLD:
+            self.msg_aggregator.add_warning(
+                f'Found that {self.chain} node at endpoint {node_interface.url} '
+                f'is not synced with the chain. Node last block is {last_block}, '
+                f'expected last block is {metadata_last_block}. '
+                f'Balances and other queries may be incorrect.',
+            )
+
+        return last_block
+
+    @staticmethod
+    def _get_last_block(self, node_interface: SubstrateInterface) -> BlockNumber:
+        """Return the chain height.
+
+        May raise:
+        - RemoteError if there is an error
+        """
+        log.debug(f'{self.chain} querying last block', url=node_interface.url)
+        try:
+            last_block = node_interface.get_block_number(
+                block_hash=node_interface.get_chain_head(),
+            )
+            if last_block is None:  # For some reason a node can rarely return None as last block
+                raise SubstrateRequestException(
+                    f'{self.chain} node failed to request last block. Returned None',
+                )
+        except (
+                requests.exceptions.RequestException,
+                SubstrateRequestException,
+                WebSocketException,
+                ValueError,
+                AttributeError,
+        ) as e:
+            message = (
+                f'{self.chain} failed to request last block '
+                f'at endpoint: {node_interface.url} due to: {e!s}.'
+            )
+            log.error(message)
+            raise RemoteError(message) from e
+
+        log.debug(f'{self.chain} last block', last_block=last_block)
+        return BlockNumber(last_block)
 
     @staticmethod
     def deserialize_tx_io_from_blockcypher(
