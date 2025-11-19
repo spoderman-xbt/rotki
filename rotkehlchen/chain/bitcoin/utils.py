@@ -3,10 +3,12 @@ import logging
 import platform
 from collections.abc import Sequence
 from enum import Enum, auto
+from http import HTTPStatus
 from typing import Any
 
 import base58check
 import bech32
+import requests
 from bip_utils import P2TRAddrEncoder, P2WPKHAddrEncoder
 
 from rotkehlchen.errors.serialization import EncodingError
@@ -15,8 +17,11 @@ from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import ensure_type
 from rotkehlchen.types import BTCAddress
 from rotkehlchen.utils.misc import satoshis_to_btc
-from rotkehlchen.utils.network import request_get_dict
+from rotkehlchen.utils.network import request_get_dict, request_get, retry_calls
 from ..substrate.types import BlockNumber
+from ...constants import GLOBAL_REQUESTS_TIMEOUT
+from ...db.settings import CachedSettings
+from ...errors.misc import RemoteError
 
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
@@ -243,15 +248,24 @@ def query_blockstream_like_blockheight(
     - KeyError if got unexpected json structure
     - DeserializationError if got unexpected json values
     """
-    response_data = request_get_dict(
-        url=f'{base_url}/blocks/tip/height',
+    url = f'{base_url}/blocks/tip/height'
+    response = retry_calls(
+        times=CachedSettings().get_query_retry_limit(),
+        location='',
         handle_429=True,
         backoff_in_seconds=4,
+        method_name=url,
+        function=requests.get,
+        # function's arguments
+        url=url,
+        timeout=GLOBAL_REQUESTS_TIMEOUT,
     )
-    log.debug(f'Got response: {response_data} from {base_url}/blocks/tip/height')
-    log.debug(f'Returning {response_data[0]}')
 
-    return BlockNumber(response_data[0])
+    if response.status_code != HTTPStatus.OK:
+        raise RemoteError(f'{url} returned status: {response.status_code}')
+
+    log.debug(f'Got response: {response.text} from {base_url}/blocks/tip/height')
+    return BlockNumber(int(response.text))
 
 
 def query_blockstream_like_account_info(

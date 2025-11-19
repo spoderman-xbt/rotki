@@ -323,8 +323,7 @@ class BitcoinManager(BitcoinCommonManager):
             last_block = query_blockstream_like_blockheight(endpoint)
         except RemoteError as e:
             message = (
-                f'{self.blockchain} failed to connect to {endpoint}'
-                f'due to {e!s}.'
+                f'{self.blockchain} failed to connect to {endpoint} due to {e!s}.'
             )
             return False, message
 
