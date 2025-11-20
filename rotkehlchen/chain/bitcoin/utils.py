@@ -238,15 +238,10 @@ def query_blockstream_like_blockheight(
         base_url: str,
 ) -> BlockNumber:
     """
-    TODO
-    
-    Query account info from APIs similar to blockstream.info
-    Returns the account balance and tx count in a tuple.
+    Query blockheight from APIs similar to blockstream.info
+    Returns the blockheight
     May raise:
     - RemoteError if got problems with querying the API
-    - UnableToDecryptRemoteData if unable to load json in request_get
-    - KeyError if got unexpected json structure
-    - DeserializationError if got unexpected json values
     """
     url = f'{base_url}/blocks/tip/height'
     response = retry_calls(

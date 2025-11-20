@@ -338,7 +338,7 @@ class ChainsAggregator(CacheableMixIn, LockableQueryMixIn):
         return self.polkadot.set_rpc_endpoint(endpoint)
 
     def set_btc_mempool_api(self, endpoint: str) -> tuple[bool, str]:
-        return self.bitcoin.set_custom_mempool_api(endpoint)
+        return self.bitcoin.set_custom_mempool_api_callbacks(endpoint)
 
     def activate_premium_status(self, premium: Premium) -> None:
         self.premium = premium

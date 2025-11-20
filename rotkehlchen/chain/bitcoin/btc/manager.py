@@ -23,7 +23,7 @@ from rotkehlchen.chain.bitcoin.utils import (
 )
 from rotkehlchen.constants.assets import A_BTC
 from rotkehlchen.db.cache import DBCacheDynamic
-from rotkehlchen.db.settings import CachedSettings, DBSettings
+from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.fval import FVal
 from rotkehlchen.logging import RotkehlchenLogsAdapter
@@ -294,9 +294,10 @@ class BitcoinManager(BitcoinCommonManager):
             multi_io=multi_io,
         )
 
-    def set_custom_mempool_api(self, endpoint: str) -> tuple[bool, str]:
+    def set_custom_mempool_api_callbacks(self, endpoint: str) -> tuple[bool, str]:
         """
-        TODO
+        Sets the API Callbacks to be used with a custom Mempool API instance if
+        fetching the blocheight from the custom API is successful.
         """
 
         if endpoint == '':  # i.e. we are deleting the custom endpoint
@@ -364,10 +365,17 @@ class BitcoinManager(BitcoinCommonManager):
             direction=direction,
         )
 
-    def get_custom_mempool_api_callbacks(self, mempool_setting):
+    @staticmethod
+    def get_custom_mempool_api_callbacks(api_url: str):
+        """
+        Retrieve custom mempool API callbacks based on provided mempool settings.
+
+        :param api_url: Custom url for the mempool api
+        :return: List of BtcApiCallback objects tailored to interact with a custom mempool
+        """
         return [BtcApiCallback(
             name='custom mempool space',
-            balances_fn=lambda accounts: query_blockstream_like_balances(base_url=mempool_setting, accounts=accounts),  # noqa: E501
-            has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=mempool_setting, accounts=accounts),  # noqa: E501
+            balances_fn=lambda accounts: query_blockstream_like_balances(base_url=api_url, accounts=accounts),  # noqa: E501
+            has_transactions_fn=lambda accounts: query_blockstream_like_has_transactions(base_url=api_url, accounts=accounts),  # noqa: E501
             transactions_fn=None,  # this API doesn't handle p2pk txs properly
         )]

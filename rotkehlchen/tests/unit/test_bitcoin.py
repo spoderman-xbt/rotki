@@ -15,13 +15,11 @@ from rotkehlchen.chain.bitcoin.utils import (
     pubkey_to_bech32_address,
     scriptpubkey_to_bech32_address,
     scriptpubkey_to_p2pkh_address,
-    scriptpubkey_to_p2sh_address, query_blockstream_like_balances, query_blockstream_like_has_transactions,
-)
+    scriptpubkey_to_p2sh_address, )
 from rotkehlchen.chain.bitcoin.validation import is_valid_btc_address
 from rotkehlchen.chain.bitcoin.xpub import XpubData
 from rotkehlchen.chain.constants import NON_BITCOIN_CHAINS, SupportedBlockchain
-from rotkehlchen.chain.evm.types import WeightedNode
-from rotkehlchen.errors.misc import InputError, RemoteError, XPUBError
+from rotkehlchen.errors.misc import RemoteError, XPUBError
 from rotkehlchen.tests.utils.ens import ENS_BRUNO_BTC_ADDR, ENS_BRUNO_BTC_BYTES
 from rotkehlchen.tests.utils.factories import (
     UNIT_BTC_ADDRESS1,
@@ -572,7 +570,7 @@ def test_local_bitcoin_mempool_api(
         return_value=(True, ''),
     )
     with btc_connect_node as btc_connect:
-        is_connected, msg = bitcoin_manager.set_custom_mempool_api(endpoint)
+        is_connected, msg = bitcoin_manager.set_custom_mempool_api_callbacks(endpoint)
         btc_connect.assert_called_once_with('https://localhost:4080/api')
 
     assert is_connected
