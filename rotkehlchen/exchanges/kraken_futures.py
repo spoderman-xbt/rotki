@@ -151,43 +151,6 @@ class KrakenFutures(Kraken):
         self.last_query_ts = 0
         self.history_events_db = DBHistoryEvents(self.db)
 
-    # TODO: unchanged
-    def set_account_type(self, account_type: KrakenAccountType | None) -> None:
-        if account_type is None:
-            account_type = DEFAULT_KRAKEN_ACCOUNT_TYPE
-
-        self.account_type = account_type
-        if self.account_type == KrakenAccountType.STARTER:
-            self.call_limit = 15
-            self.reduction_every_secs = 3
-        elif self.account_type == KrakenAccountType.INTERMEDIATE:
-            self.call_limit = 20
-            self.reduction_every_secs = 2
-        else:  # Pro
-            self.call_limit = 20
-            self.reduction_every_secs = 1
-
-    # TODO: unchanged
-    def edit_exchange_credentials(self, credentials: ExchangeAuthCredentials) -> bool:
-        changed = super().edit_exchange_credentials(credentials)
-        if credentials.api_key is not None:
-            self.session.headers.update({'API-Key': self.api_key})
-        if changed and credentials.api_secret is not None:
-            # Decode the new base64 secret
-            self.secret = ApiSecret(base64.b64decode(self.secret))
-
-        return changed
-
-    # TODO: unchanged
-    def edit_exchange_extras(self, extras: dict) -> tuple[bool, str]:
-        account_type = extras.get(KRAKEN_ACCOUNT_TYPE_KEY)
-        if account_type is None:
-            return False, 'No account type provided'
-
-        # now we can update the account type
-        self.set_account_type(account_type)
-        return True, ''
-
     def validate_api_key(self) -> tuple[bool, str]:
         """Validates that the Kraken API Key is good for usage in Rotkehlchen
 
@@ -201,49 +164,6 @@ class KrakenFutures(Kraken):
             return False, msg
 
         return True, ''
-
-    # TODO: unchanged
-    def _validate_single_api_key_action(
-            self,
-            base_url: str,
-            method_str: Literal['Balance', 'TradesHistory', 'Ledgers', 'accounts'],
-            req: dict[str, Any] | None = None,
-    ) -> tuple[bool, str]:
-        try:
-            self.api_query(base_url, method_str, req)
-        except (RemoteError, ValueError) as e:
-            error = str(e)
-            if 'Incorrect padding' in error:
-                return False, 'Provided API Key or secret is invalid'
-            if 'EAPI:Invalid key' in error:
-                return False, 'Provided API Key is invalid'
-            if 'EGeneral:Permission denied' in error:
-                msg = (
-                    'Provided API Key does not have appropriate permissions. Make '
-                    'sure that the "Query Funds", "Query Open/Closed Order and Trades"'
-                    'and "Query Ledger Entries" actions are allowed for your Kraken API Key.'
-                )
-                return False, msg
-
-            # else
-            log.error(f'Kraken API key validation error: {e!s}')
-            msg = (
-                'Unknown error at Kraken API key validation. Perhaps API Key/Secret combination invalid?'  # noqa: E501
-            )
-            return False, msg
-        return True, ''
-
-    # TODO: unchanged
-    def first_connection(self) -> None:
-        self.first_connection_made = True
-
-    # TODO: unchanged
-    def _manage_call_counter(self, method: str) -> None:
-        self.last_query_ts = ts_now()
-        if method in {'Ledgers', 'TradesHistory'}:
-            self.call_counter += 2
-        else:
-            self.call_counter += 1
 
     # TODO: almost unchanged
     def api_query(self, base_url: str, method: str, req: dict | None = None) -> defaultdict:
@@ -519,120 +439,11 @@ class KrakenFutures(Kraken):
     ) -> list[MarginPosition]:
         return []  # noop for kraken
 
-    # TODO: prob need a no-op for this for the moment
     def process_kraken_events_for_trade(
             self,
             trade_parts: list[HistoryEvent],
     ) -> list[SwapEvent]:
-        """Processes events from trade parts to a list of SwapEvents. If it's an adjustment
-        adds it to a separate list"""
-        event_id = trade_parts[0].group_identifier
-        is_spend_receive = False
-        trade_assets = []
-        spend_part, receive_part, fee_part, kfee_part = None, None, None, None
-
-        for trade_part in trade_parts:
-            if trade_part.event_type == HistoryEventType.RECEIVE:
-                is_spend_receive = True
-                receive_part = trade_part
-            elif trade_part.event_type == HistoryEventType.SPEND:
-                if trade_part.event_subtype == HistoryEventSubType.FEE:
-                    fee_part = trade_part
-                else:
-                    is_spend_receive = True
-                    spend_part = trade_part
-            elif trade_part.event_type == HistoryEventType.TRADE:
-                if trade_part.event_subtype == HistoryEventSubType.FEE:
-                    fee_part = trade_part
-                elif trade_part.event_subtype == HistoryEventSubType.SPEND:
-                    spend_part = trade_part
-                elif trade_part.asset == A_KFEE:
-                    kfee_part = trade_part
-                else:
-                    receive_part = trade_part
-
-            if (
-                    trade_part.amount != ZERO and
-                    trade_part.event_subtype != HistoryEventSubType.FEE
-            ):
-                trade_assets.append(trade_part.asset)
-
-        if is_spend_receive and len(trade_parts) < 2:
-            log.warning(
-                f'Found kraken spend/receive events {event_id} with '
-                f'less than 2 parts. {trade_parts}',
-            )
-            self.msg_aggregator.add_warning(
-                f'Found kraken spend/receive events {event_id} with '
-                f'less than 2 parts. Skipping...',
-            )
-            return []
-
-        exchange_uuid = (
-                str(event_id) +
-                str(timestamp := trade_parts[0].timestamp)
-        )
-        if len(trade_assets) != 2:
-            # This can happen some times (for lefteris 5 times since start of kraken usage)
-            # when the other part of a trade is so small it's 0. So it's either a
-            # receive event with no counterpart or a spend event with no counterpart.
-            # This happens for really really small amounts. So we add rate 0 trades
-            if spend_part is not None:
-                spend_asset = spend_part.asset
-                spend_amount = spend_part.amount
-                receive_asset = A_USD  # whatever
-                receive_amount = ZERO
-            elif receive_part is not None:
-                spend_asset = A_USD  # whatever
-                spend_amount = ZERO
-                receive_asset = receive_part.asset
-                receive_amount = receive_part.amount
-            else:
-                log.warning(f'Found historic trade entries with no counterpart {trade_parts}')
-                return []
-
-            return create_swap_events(
-                timestamp=timestamp,
-                location=Location.KRAKEN,
-                spend=AssetAmount(asset=spend_asset, amount=spend_amount),
-                receive=AssetAmount(asset=receive_asset, amount=receive_amount),
-                group_identifier=create_group_identifier_from_unique_id(
-                    location=self.location,
-                    unique_id=exchange_uuid,
-                ),
-                location_label=self.name,
-            )
-
-        if spend_part is None or receive_part is None:
-            log.error(
-                f"Failed to process {event_id}. Couldn't find "
-                f'spend/receive parts {trade_parts}',
-            )
-            self.msg_aggregator.add_error(
-                f'Failed to read trades for event {event_id}. '
-                f'More details are available at the logs',
-            )
-            return []
-
-        # If kfee was found we use it as the fee for the trade
-        fee = None
-        if kfee_part is not None and fee_part is None:
-            fee = AssetAmount(asset=A_KFEE, amount=kfee_part.amount)
-        elif fee_part is not None:
-            fee = AssetAmount(asset=fee_part.asset, amount=fee_part.amount)
-
-        return create_swap_events(
-            timestamp=timestamp,
-            location=Location.KRAKEN,
-            spend=AssetAmount(asset=spend_part.asset, amount=spend_part.amount),
-            receive=AssetAmount(asset=receive_part.asset, amount=receive_part.amount),
-            fee=fee,
-            group_identifier=create_group_identifier_from_unique_id(
-                location=self.location,
-                unique_id=exchange_uuid,
-            ),
-            location_label=self.name,
-        )
+        return []  # noop for the moment
 
     def process_kraken_trades(
             self,
