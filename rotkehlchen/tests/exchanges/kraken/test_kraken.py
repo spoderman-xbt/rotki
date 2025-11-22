@@ -1,4 +1,3 @@
-import os
 import warnings as test_warnings
 from contextlib import ExitStack
 from http import HTTPStatus
@@ -166,8 +165,6 @@ def test_coverage_of_kraken_balances():
             f'Detected newly delisted assets from Kraken: {delisted}. '
             f'Please update KRAKEN_DELISTED constant.',
         ))
-
-
 
 
 def test_querying_balances(kraken):

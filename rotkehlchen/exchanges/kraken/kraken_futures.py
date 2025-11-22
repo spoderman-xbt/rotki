@@ -19,9 +19,7 @@ from rotkehlchen.constants import (
 from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.misc import RemoteError
-from rotkehlchen.exchanges.data_structures import MarginPosition
-from rotkehlchen.exchanges.kraken.kraken import Kraken
-from rotkehlchen.exchanges.kraken.kraken_base import KrakenAccountType, KrakenBase
+from rotkehlchen.exchanges.kraken.kraken_base import KrakenAccountType, KrakenBase, _check_and_get_response
 from rotkehlchen.history.events.structures.base import (
     HistoryEvent,
 )
@@ -46,52 +44,6 @@ log = RotkehlchenLogsAdapter(logger)
 KRAKEN_QUERY_TRIES = 8
 KRAKEN_BACKOFF_DIVIDEND = 15
 MAX_CALL_COUNTER_INCREASE = 2  # Trades and Ledger produce the max increase
-
-
-def _check_and_get_response(response: Response, method: str) -> str | dict:
-    """Checks the kraken response and if it's successful returns the result.
-
-    If there is recoverable error a string is returned explaining the error
-    May raise:
-    - RemoteError if there is an unrecoverable/unexpected remote error
-    """
-    if response.status_code in {520, 525, 504}:
-        log.debug(f'Kraken returned status code {response.status_code}')
-        return 'Usual kraken 5xx shenanigans'
-    if response.status_code != 200:
-        raise RemoteError(
-            f'Kraken API request {response.url} for {method} failed with HTTP status '
-            f'code: {response.status_code}')
-
-    try:
-        log.debug(f'KRAKEN FUTURES RESPONSE: {response}')
-        log.debug(f'KRAKEN FUTURES RESPONSE: {response.text}')
-        log.debug(f'KRAKEN FUTURES RESPONSE: {response.content}')
-        log.debug(f'KRAKEN FUTURES RESPONSE: {response.raw}')
-        decoded_json = jsonloads_dict(response.text)
-    except json.decoder.JSONDecodeError as e:
-        raise RemoteError(f'Invalid JSON in Kraken response. {e}') from e
-
-    error = decoded_json.get('error', None)
-    if error:
-        if isinstance(error, list) and len(error) != 0:
-            error = error[0]
-
-        if 'Rate limit exceeded' in error:
-            log.debug(f'Kraken: Got rate limit exceeded error: {error}')
-            return 'Rate limited exceeded'
-
-        # else
-        raise RemoteError(error)
-
-    result = decoded_json.get('result', None)
-    if result is None:
-        if method == 'Balance':
-            return {}
-
-        raise RemoteError(f'Missing result in kraken response for {method}')
-
-    return result
 
 
 class KrakenFutures(KrakenBase):
@@ -260,13 +212,8 @@ class KrakenFutures(KrakenBase):
 
         return result, with_errors
 
-
-    def query_online_margin_history(
-            self,
-            start_ts: Timestamp,  # pylint: disable=unused-argument
-            end_ts: Timestamp,
-    ) -> list[MarginPosition]:
-        return []  # noop for kraken futures
+    def query_balances(self):
+        return self.query_balances_base('accounts')
 
     def process_kraken_events_for_trade(
             self,

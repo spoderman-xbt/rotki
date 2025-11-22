@@ -4,23 +4,18 @@ Module specific to Kraken's spot and margin offerings
 
 import base64
 import hashlib
-import hmac
 import itertools
-import json
 import logging
 import operator
 import os
 import time
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
-import gevent
 import requests
-from requests import Response
 
-from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.converters import asset_from_kraken
 from rotkehlchen.constants import (
     KRAKEN_API_VERSION,
@@ -30,20 +25,11 @@ from rotkehlchen.constants import (
 )
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
 from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
-from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY
-from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.data_structures import MarginPosition
-from rotkehlchen.exchanges.exchange import (
-    ExchangeInterface,
-    ExchangeQueryBalances,
-    ExchangeWithExtras,
-)
 from rotkehlchen.exchanges.kraken.kraken_base import KrakenBase, KrakenAccountType, _check_and_get_response
-from rotkehlchen.exchanges.utils import SignatureGeneratorMixin
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
     create_asset_movement_with_fee,
@@ -56,26 +42,20 @@ from rotkehlchen.history.events.structures.base import (
 )
 from rotkehlchen.history.events.structures.swap import SwapEvent, create_swap_events
 from rotkehlchen.history.events.utils import create_group_identifier_from_unique_id
-from rotkehlchen.inquirer import Inquirer
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import deserialize_fval
 from rotkehlchen.types import (
     ApiKey,
     ApiSecret,
     AssetAmount,
-    ExchangeAuthCredentials,
     Location,
     Timestamp,
     TimestampMS,
 )
-from rotkehlchen.utils.misc import pairwise, ts_ms_to_sec, ts_now
-from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
-from rotkehlchen.utils.mixins.enums import SerializableEnumNameMixin
+from rotkehlchen.utils.misc import pairwise, ts_ms_to_sec
 from rotkehlchen.utils.mixins.lockable import protect_with_lock
-from rotkehlchen.utils.serialization import jsonloads_dict
 
 if TYPE_CHECKING:
-    from rotkehlchen.assets.asset import AssetWithOracles
     from rotkehlchen.db.dbhandler import DBHandler
     from rotkehlchen.user_messages import MessagesAggregator
 
@@ -263,85 +243,9 @@ class Kraken(KrakenBase):
 
         return _check_and_get_response(response, method)
 
-    # ---- General exchanges interface ----
-    @protect_with_lock()
-    @cache_response_timewise()
-    def query_balances(self) -> ExchangeQueryBalances:
-        try:
-            kraken_balances = self.api_query(KRAKEN_BASE_URL, 'Balance', req={})
-            kraken_futures_balances = self.api_query(KRAKEN_FUTURES_BASE_URL, 'accounts', req={})
-            log.info(f'got kraken ftures balances for {kraken_futures_balances}')
-        except RemoteError as e:
-            if "Missing key: 'result'" in str(e):
-                # handle https://github.com/rotki/rotki/issues/946
-                kraken_balances = {}
-            else:
-                msg = (
-                    'Kraken API request failed. Could not reach kraken due '
-                    f'to {e}'
-                )
-                log.error(msg)
-                return None, msg
+    def query_balances(self):
+        return self.query_balances_base('Balances')
 
-        assets_balance: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
-        for kraken_name, amount_ in kraken_balances.items():
-            log.debug(f'deserializing kraken balance for {kraken_name} with amount: {amount_}')
-            try:
-                amount = deserialize_fval(amount_)
-                if amount == ZERO:
-                    continue
-
-                our_asset = asset_from_kraken(kraken_name)
-            except UnknownAsset as e:
-                self.send_unknown_asset_message(
-                    asset_identifier=e.identifier,
-                    details='balance query',
-                )
-                continue
-            except DeserializationError as e:
-                msg = str(e)
-                self.msg_aggregator.add_error(
-                    f'Error processing kraken balance for {kraken_name}. Check logs '
-                    f'for details. Ignoring it.',
-                )
-                log.error(
-                    'Error processing kraken balance',
-                    kraken_name=kraken_name,
-                    amount=amount_,
-                    error=msg,
-                )
-                continue
-
-            balance = Balance(amount=amount)
-            if our_asset.identifier != 'KFEE':
-                # There is no price value for KFEE
-                try:
-                    usd_price = Inquirer.find_usd_price(our_asset)
-                except RemoteError as e:
-                    self.msg_aggregator.add_error(
-                        f'Error processing kraken balance entry due to inability to '
-                        f'query USD price: {e!s}. Skipping balance entry',
-                    )
-                    continue
-
-                balance.usd_value = balance.amount * usd_price
-
-            assets_balance[our_asset] += balance
-            log.debug(
-                'kraken balance query result',
-                currency=our_asset,
-                amount=balance.amount,
-                usd_value=balance.usd_value,
-            )
-
-        return dict(assets_balance), ''
-
-    def query_online_margin_history(
-            self,
-            start_ts: Timestamp,  # pylint: disable=unused-argument
-            end_ts: Timestamp,
-    ) -> list[MarginPosition]:
-        return []  # noop for kraken
     def process_kraken_events_for_trade(
             self,
             trade_parts: list[HistoryEvent],

@@ -16,6 +16,7 @@ def test_kraken_validate_key(demo_kraken_futures):
     assert result is True
     assert msg == ''
 
+
 def test_querying_balances(demo_kraken_futures):
     result, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''

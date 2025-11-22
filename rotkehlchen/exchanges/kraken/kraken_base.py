@@ -21,6 +21,7 @@ from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
+from rotkehlchen.exchanges.data_structures import MarginPosition
 from rotkehlchen.exchanges.exchange import (
     ExchangeInterface,
     ExchangeQueryBalances,
@@ -288,15 +289,29 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
             f'After {KRAKEN_QUERY_TRIES} kraken queries for {method} could still not be completed',
         )
 
+    @abstractmethod
+    def query_balances(self):
+        """
+        An abstract method for querying balances.
+
+        This method should be implemented by subclasses and is responsible
+        for retrieving balance information. It may interact with databases,
+        APIs, or any other data storage mechanism to fetch the required
+        balance details.
+
+        Raises:
+            NotImplementedError: If the subclass does not implement this method.
+        """
+
+
     # TODO: Think this is the main thing so come back to this
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
-    def query_balances(self, method: str) -> ExchangeQueryBalances:
+    def query_balances_base(self, method: str) -> ExchangeQueryBalances:
         try:
-            kraken_balances = self.api_query('Balance', req={})
-            kraken_futures_balances = self.api_query( 'accounts', req={})
-            log.info(f'got kraken ftures balances for {kraken_futures_balances}')
+            kraken_balances = self.api_query(method, req={})
+            log.info(f'got kraken {self.location} balances: {kraken_balances}')
         except RemoteError as e:
             if "Missing key: 'result'" in str(e):
                 # handle https://github.com/rotki/rotki/issues/946
@@ -460,3 +475,11 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
         if extra_dict is not None:
             request.update(extra_dict)
         return self.api_query(endpoint, request)
+
+    def query_online_margin_history(
+            self,
+            start_ts: Timestamp,  # pylint: disable=unused-argument
+            end_ts: Timestamp,
+    ) -> list[MarginPosition]:
+        return []  # noop for kraken
+
