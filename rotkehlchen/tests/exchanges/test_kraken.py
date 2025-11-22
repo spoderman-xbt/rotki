@@ -37,7 +37,7 @@ from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import ModifiableDBSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.kraken import Kraken
+from rotkehlchen.exchanges.kraken.kraken import Kraken
 from rotkehlchen.fval import FVal
 from rotkehlchen.history.events.structures.asset_movement import create_asset_movement_with_fee
 from rotkehlchen.history.events.structures.base import HistoryBaseEntryType, HistoryEvent
