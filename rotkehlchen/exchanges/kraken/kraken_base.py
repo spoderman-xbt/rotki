@@ -238,7 +238,7 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
         Method that implements the auth and query details of the corresponding API method
         """
 
-    def api_query(self, method: str, req: dict | None = None) -> defaultdict:
+    def api_query(self, method: str, req: dict | None = None) -> dict:
         tries = KRAKEN_QUERY_TRIES
         while tries > 0:
             if self.call_counter + MAX_CALL_COUNTER_INCREASE > self.call_limit:
