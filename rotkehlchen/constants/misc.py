@@ -20,7 +20,6 @@ NFT_DIRECTIVE = '_nft_'
 KRAKEN_BASE_URL = 'https://api.kraken.com'
 KRAKEN_API_VERSION = '0'
 KRAKEN_FUTURES_BASE_URL = 'https://futures.kraken.com'
-KRAKEN_FUTURES_BASE_URL_PATH = '/derivatives/api/'
 KRAKEN_FUTURES_API_VERSION = 'v3'
 
 DEFAULT_MAX_LOG_SIZE_IN_MB = 300

@@ -1,27 +1,21 @@
 """
 Module specific to Kraken's spot and margin offerings
 """
-import base64
 import hashlib
 import logging
-import os
 import time
 from typing import TYPE_CHECKING
 
 import requests
 
 from rotkehlchen.constants import (
-    KRAKEN_BASE_URL,
     KRAKEN_FUTURES_API_VERSION,
 )
-from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
+from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.misc import RemoteError
+from rotkehlchen.exchanges.exchange import ExchangeQueryBalances
 from rotkehlchen.exchanges.krakenbase import KrakenAccountType, KrakenBase, _check_and_get_response
-from rotkehlchen.history.events.structures.base import (
-    HistoryEvent,
-)
-from rotkehlchen.history.events.structures.swap import SwapEvent
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.types import (
     ApiKey,
@@ -39,10 +33,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
 
-KRAKEN_QUERY_TRIES = 8
-KRAKEN_BACKOFF_DIVIDEND = 15
-MAX_CALL_COUNTER_INCREASE = 2  # Trades and Ledger produce the max increase
-
 
 class Krakenfutures(KrakenBase):
     def __init__(
@@ -53,7 +43,7 @@ class Krakenfutures(KrakenBase):
             database: 'DBHandler',
             msg_aggregator: 'MessagesAggregator',
             kraken_account_type: KrakenAccountType | None = None,
-            base_uri: str = KRAKEN_BASE_URL,
+            base_uri: str = KRAKEN_FUTURES_BASE_URL,
     ):
         super().__init__(
             name=name,
@@ -75,14 +65,20 @@ class Krakenfutures(KrakenBase):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action(KRAKEN_FUTURES_BASE_URL, 'accounts')
+        valid, msg = self._validate_single_api_key_action(self.base_uri, 'accounts')
         if not valid:
             return False, msg
 
         return True, ''
 
+    # ---- General exchanges interface ----
+    @protect_with_lock()
+    @cache_response_timewise()
+    def query_balances(self) -> ExchangeQueryBalances:
+        return self.query_balances_base('accounts')
 
-    def query_api_method(self, method: str, req: dict | None = None) -> dict | str:
+
+    def query_private_api_method(self, method: str, req: dict | None = None) -> dict | str:
         """API queries that require a valid key/secret pair.
 
         Arguments:
@@ -93,9 +89,8 @@ class Krakenfutures(KrakenBase):
         if req is None:
             req = {}
 
-        urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method if method is not None else '')
-        urlpath_without_prefix = urlpath.removeprefix('/derivatives')  # TODO: Could prob make nicer in setup/constants
-
+        urlpath: str = '/derivatives/api/' + KRAKEN_FUTURES_API_VERSION + '/' + method if method is not None else ''
+        urlpath_without_prefix = urlpath.removeprefix('/derivatives')
         req['nonce'] = str(int(1000 * time.time()))
         # post_data = urlencode(req)
         post_data = ''
@@ -113,7 +108,7 @@ class Krakenfutures(KrakenBase):
             'Authent': signature,
         })
         try:
-            full_url = KRAKEN_FUTURES_BASE_URL + urlpath
+            full_url = self.base_uri + urlpath
             log.debug(f'Querying Kraken for {method} with {req} at URL: {full_url}')
             response = self.session.get(
                 full_url,
@@ -132,18 +127,3 @@ class Krakenfutures(KrakenBase):
 
         # Make asset tickers all uppercase before returning
         return {k.upper(): v for k, v in cash_balances.items()}
-
-
-
-    @protect_with_lock()
-    @cache_response_timewise()
-    def query_balances(self):
-        return self.query_balances_base('accounts')
-
-    def process_kraken_events_for_trade(
-            self,
-            trade_parts: list[HistoryEvent],
-    ) -> list[SwapEvent]:
-        return []  # noop for the moment
-
-    # TODO: Might be other missing no-ops that I removed here

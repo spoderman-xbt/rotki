@@ -222,7 +222,7 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
             self.call_counter += 1
 
     @abstractmethod
-    def query_api_method(self, *args, **kwargs):  # TODO: Make a better name for this
+    def query_private_api_method(self, *args, **kwargs):
         """
         Method that implements the auth and query details of the corresponding API method
         """
@@ -258,7 +258,7 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
             )
 
             # This big kahuna:
-            result = self.query_api_method(method, req)
+            result = self.query_private_api_method(method, req)
 
             if isinstance(result, str) and result != 'success':
                 # Got a recoverable error
@@ -279,21 +279,15 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
         )
 
     @abstractmethod
-    def query_balances(self):
+    def query_balances(self) -> ExchangeQueryBalances:
         """
         An abstract method for querying balances.
 
         This method should be implemented by subclasses and is responsible
-        for retrieving balance information. It may interact with databases,
-        APIs, or any other data storage mechanism to fetch the required
-        balance details.
-
-        Raises:
-            NotImplementedError: If the subclass does not implement this method.
+        for retrieving balance information.
         """
 
 
-    # TODO: Think this is the main thing so come back to this
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
@@ -368,7 +362,6 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
 
         return dict(assets_balance), ''
 
-    # TODO: Might be spot specific but sounds like it would be generic
     def query_until_finished(
             self,
             endpoint: Literal['Ledgers'],

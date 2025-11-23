@@ -25,6 +25,7 @@ from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
+from rotkehlchen.exchanges.exchange import ExchangeQueryBalances
 from rotkehlchen.exchanges.krakenbase import KrakenBase, KrakenAccountType, _check_and_get_response
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
@@ -148,7 +149,7 @@ class Kraken(KrakenBase):
             return False, msg
         return True, ''
 
-    def query_api_method(self, method: str, req: dict | None = None) -> dict | str:
+    def query_private_api_method(self, method: str, req: dict | None = None) -> dict | str:
         """API queries that require a valid key/secret pair.
         formerly known as `query_private()`
 
@@ -175,7 +176,7 @@ class Kraken(KrakenBase):
         })
         try:
             response = self.session.post(
-                KRAKEN_BASE_URL + urlpath,
+                self.base_uri + urlpath,
                 data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
             )
@@ -183,21 +184,25 @@ class Kraken(KrakenBase):
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
 
-        ## below is modified from original (taken from check_and_get_response
+        # TODO: Think I made a balls of this, come back to it
         decoded_json = _check_and_get_response(response, method)
 
-        result = decoded_json.get('result', None)
-        if result is None:
-            if method == 'Balance':
-                return {}
+        if decoded_json is str:
+            return decoded_json
+        else:
+            result = decoded_json.get('result', None)
+            if result is None:
+                if method == 'Balance':
+                    return {}
 
-            raise RemoteError(f'Missing result in kraken response for {method}')
+                raise RemoteError(f'Missing result in kraken response for {method}')
 
-        return result
+            return result
 
+    # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
-    def query_balances(self):
+    def query_balances(self) -> ExchangeQueryBalances:
         return self.query_balances_base('Balance')
 
     def process_kraken_events_for_trade(
