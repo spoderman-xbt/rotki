@@ -29,7 +29,7 @@ from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.kraken.kraken_base import KrakenBase, KrakenAccountType, _check_and_get_response
+from rotkehlchen.exchanges.kraken.krakenbase import KrakenBase, KrakenAccountType, _check_and_get_response
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
     create_asset_movement_with_fee,

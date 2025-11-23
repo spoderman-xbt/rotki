@@ -19,7 +19,7 @@ from rotkehlchen.constants import (
 from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.misc import RemoteError
-from rotkehlchen.exchanges.kraken.kraken_base import KrakenAccountType, KrakenBase, _check_and_get_response
+from rotkehlchen.exchanges.kraken.krakenbase import KrakenAccountType, KrakenBase, _check_and_get_response
 from rotkehlchen.history.events.structures.base import (
     HistoryEvent,
 )
@@ -59,7 +59,7 @@ class KrakenFutures(KrakenBase):
     ):
         super().__init__(
             name=name,
-            location=Location.KRAKEN_FUTURES,
+            location=Location.KRAKENFUTURES,
             api_key=api_key,
             secret=secret,
             database=database,
