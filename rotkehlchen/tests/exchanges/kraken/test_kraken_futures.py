@@ -1,20 +1,15 @@
 import os
-import warnings as test_warnings
 from unittest import mock
 
 import pytest
-import requests
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.asset import Asset
-from rotkehlchen.assets.converters import asset_from_kraken
-from rotkehlchen.constants.assets import A_USDC, A_USDT
-from rotkehlchen.errors.asset import UnknownAsset
-from rotkehlchen.errors.serialization import DeserializationError
+from rotkehlchen.constants import ZERO
+from rotkehlchen.constants.assets import A_BCH, A_BTC, A_ETH, A_USD, A_USDC, A_USDT, A_EUR
 from rotkehlchen.exchanges.krakenfutures import Krakenfutures
 from rotkehlchen.fval import FVal
-from rotkehlchen.tests.utils.exchanges import get_exchange_asset_symbols
-from rotkehlchen.tests.utils.kraken import KRAKEN_DELISTED
+from rotkehlchen.tests.utils.constants import A_LTC, A_GBP, A_XRP
 from rotkehlchen.types import Location
 
 
@@ -37,24 +32,33 @@ def test_querying_balances(demo_kraken_futures):
     )
 
     with find_usd_price_mock:
-        result, error_or_empty = demo_kraken_futures.query_balances()
+        balances, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''
-    assert isinstance(result, dict)
-    for asset, entry in result.items():
+    assert isinstance(balances, dict)
+    for asset, entry in balances.items():
         assert isinstance(asset, Asset)
         assert isinstance(entry, Balance)
 
-    assert result['USD'] == Balance(FVal(5000), usd_value=FVal(5000))
-    assert result['EUR'] == Balance(FVal(5000), usd_value=FVal(5000))
-    assert result['GBP'] == Balance(FVal(3791.9006), usd_value=FVal(3791.9006))
-    assert result['BTC'].amount > 0
-    assert result['ETH'].amount > 0
-    assert result['LTC'].amount > 0
-    assert result['BCH'].amount > 0
-    assert result['XRP'].amount > 0
-    assert result[A_USDC.identifier].amount > 0
-    assert result[A_USDT.identifier].amount > 0
-
+    assert balances[A_USD].amount == FVal('5000')
+    assert balances[A_USD].usd_value == balances[A_USD].amount
+    assert balances[A_EUR].amount == FVal('5000')
+    assert balances[A_EUR].usd_value == balances[A_EUR].amount
+    assert balances[A_GBP].amount == FVal('3791.9006')
+    assert balances[A_GBP].usd_value == balances[A_GBP].amount
+    assert balances[A_ETH].amount == FVal('1.5717981686')
+    assert balances[A_ETH].usd_value > ZERO
+    assert balances[A_LTC].amount == FVal('52.1910861801')
+    assert balances[A_LTC].usd_value > ZERO
+    assert balances[A_BTC].amount == FVal('0.0524990493')
+    assert balances[A_BTC].usd_value > ZERO
+    assert balances[A_BCH].amount == FVal('10.0184941402')
+    assert balances[A_BCH].usd_value > ZERO
+    assert balances[A_XRP].amount == FVal('2213.8685582')
+    assert balances[A_XRP].usd_value > ZERO
+    assert balances[A_USDC.identifier].amount == FVal('5000.65008452')
+    assert balances[A_USDC.identifier].usd_value > ZERO
+    assert balances[A_USDT.identifier].amount == FVal('5003.96313881')
+    assert balances[A_USDT.identifier].usd_value > ZERO
 
 
 @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
@@ -85,7 +89,7 @@ def test_kraken_wrong_key(demo_kraken_futures):
     assert 'authenticationError' in msg
 
 
-### Below tests are taken from test_kraken
+# Below tests are taken from test_kraken
 
 def test_name():
     exchange = Krakenfutures('kraken1', 'a', b'YQ==', object(), object())  # b'YQ==' is base64 for 'a'
