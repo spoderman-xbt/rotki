@@ -129,27 +129,23 @@ class Kraken(KrakenBase):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action(KRAKEN_BASE_URL, 'Balance')
+        valid, msg = self._validate_single_api_key_action(self.base_uri, 'Balance')
         if not valid:
-            log.debug('Futures API key is invalid for spot balances')
             return False, msg
         valid, msg = self._validate_single_api_key_action(
-            KRAKEN_BASE_URL,
+            self.base_uri,
             method_str='TradesHistory',
             req={'start': 0, 'end': 0},
         )
         if not valid:
-            log.debug('Futures API key is valid for spot trade history')
             return False, msg
         valid, msg = self._validate_single_api_key_action(
-            KRAKEN_BASE_URL,
+            self.base_uri,
             method_str='Ledgers',
             req={'start': 0, 'end': 0, 'type': 'deposit'},
         )
         if not valid:
-            log.debug('Futures API key is valid for spot ledgers')
             return False, msg
-
         return True, ''
 
     def query_api_method(self, method: str, req: dict | None = None) -> dict | str:
@@ -189,9 +185,6 @@ class Kraken(KrakenBase):
 
         ## below is modified from original (taken from check_and_get_response
         decoded_json = _check_and_get_response(response, method)
-
-        if isinstance(decoded_json, str):
-            return decoded_json
 
         result = decoded_json.get('result', None)
         if result is None:

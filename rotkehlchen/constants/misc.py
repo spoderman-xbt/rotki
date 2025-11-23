@@ -19,7 +19,7 @@ NFT_DIRECTIVE = '_nft_'
 # API URLS
 KRAKEN_BASE_URL = 'https://api.kraken.com'
 KRAKEN_API_VERSION = '0'
-KRAKEN_FUTURES_BASE_URL = 'https://demo-futures.kraken.com'
+KRAKEN_FUTURES_BASE_URL = 'https://futures.kraken.com'
 KRAKEN_FUTURES_BASE_URL_PATH = '/derivatives/api/'
 KRAKEN_FUTURES_API_VERSION = 'v3'
 
