@@ -343,7 +343,9 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
             if our_asset.identifier != 'KFEE':
                 # There is no price value for KFEE
                 try:
+                    log.error(f'getting usd price for {our_asset}')
                     usd_price = Inquirer.find_usd_price(our_asset)
+                    log.error(f'got {usd_price}')
                 except RemoteError as e:
                     self.msg_aggregator.add_error(
                         f'Error processing kraken balance entry due to inability to '

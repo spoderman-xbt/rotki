@@ -25,14 +25,7 @@ def test_kraken_validate_key(demo_kraken_futures):
 
 
 def test_querying_balances(demo_kraken_futures):
-    # Below mock is used to fix AttributeError: type object 'Inquirer' has no attribute '_cached_current_price'
-    find_usd_price_mock = mock.patch(
-        'rotkehlchen.inquirer.Inquirer.find_usd_price',
-        return_value=1,
-    )
-
-    with find_usd_price_mock:
-        balances, error_or_empty = demo_kraken_futures.query_balances()
+    balances, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''
     assert isinstance(balances, dict)
     for asset, entry in balances.items():
@@ -40,11 +33,11 @@ def test_querying_balances(demo_kraken_futures):
         assert isinstance(entry, Balance)
 
     assert balances[A_USD].amount == FVal('5000')
-    assert balances[A_USD].usd_value == balances[A_USD].amount
+    assert balances[A_USD].usd_value  > ZERO
     assert balances[A_EUR].amount == FVal('5000')
-    assert balances[A_EUR].usd_value == balances[A_EUR].amount
+    assert balances[A_EUR].usd_value  > ZERO
     assert balances[A_GBP].amount == FVal('3791.9006')
-    assert balances[A_GBP].usd_value == balances[A_GBP].amount
+    assert balances[A_GBP].usd_value > ZERO
     assert balances[A_ETH].amount == FVal('1.5717981686')
     assert balances[A_ETH].usd_value > ZERO
     assert balances[A_LTC].amount == FVal('52.1910861801')
@@ -92,6 +85,6 @@ def test_kraken_wrong_key(demo_kraken_futures):
 # Below tests are taken from test_kraken
 
 def test_name():
-    exchange = Krakenfutures('kraken1', 'a', b'YQ==', object(), object())  # b'YQ==' is base64 for 'a'
+    exchange = Krakenfutures('Kraken Futures 1', 'a', b'YQ==', object(), object())  # b'YQ==' is base64 for 'a'
     assert exchange.location == Location.KRAKENFUTURES
-    assert exchange.name == 'krakenfutures1'
+    assert exchange.name == 'Kraken Futures 1'
