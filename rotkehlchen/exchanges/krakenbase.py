@@ -96,7 +96,6 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
     return decoded_json
 
 
-
 class KrakenAccountType(SerializableEnumNameMixin):
     STARTER = 0
     INTERMEDIATE = 1

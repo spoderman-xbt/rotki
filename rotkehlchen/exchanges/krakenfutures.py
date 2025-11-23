@@ -120,10 +120,23 @@ class Krakenfutures(KrakenBase):
 
         decoded_json = _check_and_get_response(response, method)
 
-        if decoded_json is str:
+        if isinstance(decoded_json, str):
             return decoded_json
 
-        cash_balances = decoded_json['accounts']['cash']['balances']
+        accounts: dict | None = self._get_inner_dict(decoded_json, 'accounts', method)
+        cash: dict | None = self._get_inner_dict(accounts, 'cash', method)
+        cash_balances: dict | None = self._get_inner_dict(cash, 'balances', method)
 
-        # Make asset tickers all uppercase before returning
+        # Make asset tickers all uppercase before returning to allign them with Kraken spot
         return {k.upper(): v for k, v in cash_balances.items()}
+
+    @staticmethod
+    def _get_inner_dict(dictionary, inner_dict_keyname, method) -> dict | None:
+        result: dict | None = dictionary.get(inner_dict_keyname, None)
+        if result is None:
+            if method == 'accounts':
+                return {}
+
+            raise RemoteError(f'Missing result in kraken futures response for {method}')
+
+        return result

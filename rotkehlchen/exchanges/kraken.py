@@ -185,6 +185,10 @@ class Kraken(KrakenBase):
         self._manage_call_counter(method)
 
         decoded_json = _check_and_get_response(response, method)
+
+        if isinstance(decoded_json, str):
+            return decoded_json
+
         result = decoded_json.get('result', None)
         if result is None:
             if method == 'Balance':
