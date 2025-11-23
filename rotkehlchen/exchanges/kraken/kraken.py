@@ -63,11 +63,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 log = RotkehlchenLogsAdapter(logger)
 
-KRAKEN_QUERY_TRIES = 8
-KRAKEN_BACKOFF_DIVIDEND = 15
-MAX_CALL_COUNTER_INCREASE = 2  # Trades and Ledger produce the max increase
-
-
 def kraken_ledger_entry_type_to_ours(value: str) -> tuple[HistoryEventType, HistoryEventSubType]:
     """Turns a kraken ledger entry to our history event type, subtype combination
 
@@ -200,6 +195,9 @@ class Kraken(KrakenBase):
 
         ## below is modified from original (taken from check_and_get_response
         decoded_json = _check_and_get_response(response, method)
+
+        if isinstance(decoded_json, str):
+            return decoded_json
 
         result = decoded_json.get('result', None)
         if result is None:
