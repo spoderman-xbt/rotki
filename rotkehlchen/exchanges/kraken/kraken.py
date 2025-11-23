@@ -198,7 +198,17 @@ class Kraken(KrakenBase):
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
 
-        return _check_and_get_response(response, method)
+        ## below is modified from original (taken from check_and_get_response
+        decoded_json = _check_and_get_response(response, method)
+
+        result = decoded_json.get('result', None)
+        if result is None:
+            if method == 'Balance':
+                return {}
+
+            raise RemoteError(f'Missing result in kraken response for {method}')
+
+        return result
 
     def query_balances(self):
         return self.query_balances_base('Balance')

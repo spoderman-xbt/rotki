@@ -94,14 +94,7 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
         # else
         raise RemoteError(error)
 
-    result = decoded_json.get('result', None)
-    if result is None:
-        if method == 'Balance':
-            return {}
-
-        raise RemoteError(f'Missing result in kraken response for {method}')
-
-    return result
+    return decoded_json
 
 
 class KrakenAccountType(SerializableEnumNameMixin):

@@ -461,6 +461,7 @@ class Inquirer:
     @staticmethod
     def get_cached_current_price_entry(
             cache_key: tuple[Asset, Asset],
+            # inquirer: 'Inquirer',  # pylint: disable=unused-argument
     ) -> CachedPriceEntry | None:
         cache = Inquirer._cached_current_price.get(cache_key)
         if cache is None or ts_now() - cache.time > CURRENT_PRICE_CACHE_SECS:

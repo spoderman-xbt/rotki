@@ -1,9 +1,11 @@
 import os
+from unittest import mock
 
 import pytest
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.asset import Asset
+from rotkehlchen.fval import FVal
 
 
 @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')
@@ -18,14 +20,21 @@ def test_kraken_validate_key(demo_kraken_futures):
 
 
 def test_querying_balances(demo_kraken_futures):
-    result, error_or_empty = demo_kraken_futures.query_balances()
+    # Below mock is used to fix AttributeError: type object 'Inquirer' has no attribute '_cached_current_price'
+    find_usd_price_mock = mock.patch(
+        'rotkehlchen.inquirer.Inquirer.find_usd_price',
+        return_value=1,
+    )
+
+    with find_usd_price_mock:
+        result, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''
     assert isinstance(result, dict)
     for asset, entry in result.items():
         assert isinstance(asset, Asset)
         assert isinstance(entry, Balance)
 
-    assert result['USD'] == 5000
+    assert result['USD'] == Balance(FVal(5000), usd_value=FVal(5000))
 
 
 

@@ -129,88 +129,9 @@ class KrakenFutures(KrakenBase):
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
 
-        return _check_and_get_response(response, method)
+        decoded_json = _check_and_get_response(response, method)
 
-    def query_until_finished(
-            self,
-            endpoint: Literal['Ledgers'],
-            keyname: str,
-            start_ts: Timestamp,
-            end_ts: Timestamp,
-            extra_dict: dict | None = None,
-    ) -> tuple[list, bool]:
-        """ Abstracting away the functionality of querying a kraken endpoint where
-        you need to check the 'count' of the returned results and provide sufficient
-        calls with enough offset to gather all the data of your query.
-        """
-        result: list = []
-
-        with_errors = False
-        log.debug(
-            f'Querying Kraken {endpoint} from {start_ts} to '
-            f'{end_ts} with extra_dict {extra_dict}',
-        )
-        response = self._query_endpoint_for_period(
-            endpoint=endpoint,
-            start_ts=start_ts,
-            end_ts=end_ts,
-            extra_dict=extra_dict,
-        )
-        count = response['count']
-        offset = len(response[keyname])
-        result.extend(response[keyname].values())
-
-        log.debug(f'Kraken {endpoint} Query Response with count:{count}')
-
-        while offset < count:
-            log.debug(
-                f'Querying Kraken {endpoint} from {start_ts} to {end_ts} '
-                f'with offset {offset} and extra_dict {extra_dict}',
-            )
-            try:
-                response = self._query_endpoint_for_period(
-                    endpoint=endpoint,
-                    start_ts=start_ts,
-                    end_ts=end_ts,
-                    offset=offset,
-                    extra_dict=extra_dict,
-                )
-            except RemoteError as e:
-                with_errors = True
-                log.error(
-                    f'One of krakens queries when querying endpoint for period failed '
-                    f'with {e!s}. Returning only results we have.',
-                )
-                break
-
-            if count != response['count']:
-                log.error(
-                    f'Kraken unexpected response while querying endpoint for period. '
-                    f'Original count was {count} and response returned {response["count"]}',
-                )
-                with_errors = True
-                break
-
-            response_length = len(response[keyname])
-            offset += response_length
-            if response_length == 0 and offset != count:
-                # If we have provided specific filtering then this is a known
-                # issue documented below, so skip the warning logging
-                # https://github.com/rotki/rotki/issues/116
-                if extra_dict:
-                    break
-                # it is possible that kraken misbehaves and either does not
-                # send us enough results or thinks it has more than it really does
-                log.warning(
-                    f'Missing {count - offset} results when querying kraken '
-                    f'endpoint {endpoint}',
-                )
-                with_errors = True
-                break
-
-            result.extend(response[keyname].values())
-
-        return result, with_errors
+        return decoded_json['accounts']['cash']['balances']
 
     def query_balances(self):
         return self.query_balances_base('accounts')
