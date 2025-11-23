@@ -36,7 +36,7 @@ from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import ModifiableDBSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.kraken.kraken import Kraken
+from rotkehlchen.exchanges.kraken import Kraken
 from rotkehlchen.fval import FVal
 from rotkehlchen.history.events.structures.asset_movement import create_asset_movement_with_fee
 from rotkehlchen.history.events.structures.base import HistoryBaseEntryType, HistoryEvent
@@ -206,8 +206,8 @@ def test_querying_rate_limit_exhaustion(kraken, database):
         raise AssertionError(f'Unexpected url in kraken query: {url}')
 
     patch_kraken = patch.object(kraken.session, 'post', side_effect=mock_response)
-    patch_retries = patch('rotkehlchen.exchanges.kraken.kraken_base.KRAKEN_QUERY_TRIES', new=2)
-    patch_dividend = patch('rotkehlchen.exchanges.kraken.kraken_base.KRAKEN_BACKOFF_DIVIDEND', new=1)
+    patch_retries = patch('rotkehlchen.exchanges.kraken.krakenbase.KRAKEN_QUERY_TRIES', new=2)
+    patch_dividend = patch('rotkehlchen.exchanges.kraken.krakenbase.KRAKEN_BACKOFF_DIVIDEND', new=1)
 
     with ExitStack() as stack:
         stack.enter_context(gevent.Timeout(8))

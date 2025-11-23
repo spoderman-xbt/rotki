@@ -5,8 +5,9 @@ import pytest
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.asset import Asset
-from rotkehlchen.exchanges.kraken.krakenfutures import KrakenFutures
+from rotkehlchen.exchanges.krakenfutures import Krakenfutures
 from rotkehlchen.fval import FVal
+from rotkehlchen.tests.utils.exchanges import get_exchange_asset_symbols
 from rotkehlchen.types import Location
 
 
@@ -71,13 +72,14 @@ def test_querying_balances(demo_kraken_futures):
 ### Below tests are taken from test_kraken
 
 def test_name():
-    exchange = KrakenFutures('kraken1', 'a', b'YQ==', object(), object())  # b'YQ==' is base64 for 'a'
+    exchange = Krakenfutures('kraken1', 'a', b'YQ==', object(), object())  # b'YQ==' is base64 for 'a'
     assert exchange.location == Location.KRAKEN
     assert exchange.name == 'kraken1'
 
 
 @pytest.mark.asset_test
 def test_coverage_of_kraken_balances():
+    # TODO: Could not find mapping for usdt and usdc
     response = requests.get('https://api.kraken.com/0/public/Assets')
     got_assets = set(response.json()['result'].keys())
     expected_assets = get_exchange_asset_symbols(

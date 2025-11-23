@@ -3,14 +3,12 @@ Module specific to Kraken's spot and margin offerings
 """
 import base64
 import hashlib
-import json
 import logging
 import os
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import requests
-from requests import Response
 
 from rotkehlchen.constants import (
     KRAKEN_BASE_URL,
@@ -19,7 +17,7 @@ from rotkehlchen.constants import (
 from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.misc import RemoteError
-from rotkehlchen.exchanges.kraken.krakenbase import KrakenAccountType, KrakenBase, _check_and_get_response
+from rotkehlchen.exchanges.krakenbase import KrakenAccountType, KrakenBase, _check_and_get_response
 from rotkehlchen.history.events.structures.base import (
     HistoryEvent,
 )
@@ -29,9 +27,9 @@ from rotkehlchen.types import (
     ApiKey,
     ApiSecret,
     Location,
-    Timestamp,
 )
-from rotkehlchen.utils.serialization import jsonloads_dict
+from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
+from rotkehlchen.utils.mixins.lockable import protect_with_lock
 
 if TYPE_CHECKING:
     from rotkehlchen.db.dbhandler import DBHandler
@@ -46,7 +44,7 @@ KRAKEN_BACKOFF_DIVIDEND = 15
 MAX_CALL_COUNTER_INCREASE = 2  # Trades and Ledger produce the max increase
 
 
-class KrakenFutures(KrakenBase):
+class Krakenfutures(KrakenBase):
     def __init__(
             self,
             name: str,
@@ -68,10 +66,10 @@ class KrakenFutures(KrakenBase):
             kraken_account_type=kraken_account_type,
         )
         # Kraken provides base64-encoded secrets, decode it for use with mixin methods
-        if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
-            self.secret = ApiSecret(self.secret)
-        else:  # TODO: See if this is the case for PROD
-            self.secret = ApiSecret(base64.b64decode(self.secret))
+        # if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
+        self.secret = ApiSecret(self.secret)
+        # else:  # TODO: See if this is the case for PROD
+        #     self.secret = ApiSecret(base64.b64decode(self.secret))
 
     def validate_api_key(self) -> tuple[bool, str]:
         """Validates that the Kraken API Key is good for usage in Rotkehlchen
@@ -133,6 +131,8 @@ class KrakenFutures(KrakenBase):
 
         return decoded_json['accounts']['cash']['balances']
 
+    @protect_with_lock()
+    @cache_response_timewise()
     def query_balances(self):
         return self.query_balances_base('accounts')
 

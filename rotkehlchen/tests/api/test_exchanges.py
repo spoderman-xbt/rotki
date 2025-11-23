@@ -23,7 +23,7 @@ from rotkehlchen.exchanges.constants import (
     EXCHANGES_WITHOUT_API_SECRET,
     SUPPORTED_EXCHANGES,
 )
-from rotkehlchen.exchanges.kraken.krakenbase import DEFAULT_KRAKEN_ACCOUNT_TYPE, KrakenAccountType
+from rotkehlchen.exchanges.krakenbase import DEFAULT_KRAKEN_ACCOUNT_TYPE, KrakenAccountType
 from rotkehlchen.exchanges.kucoin import API_KEY_ERROR_CODE_ACTION as KUCOIN_API_KEY_ERROR_CODE
 from rotkehlchen.exchanges.okx import OkxLocation
 from rotkehlchen.fval import FVal

@@ -2,12 +2,10 @@
 Module specific to Kraken's spot and margin offerings
 """
 
-import base64
 import hashlib
 import itertools
 import logging
 import operator
-import os
 import time
 from collections import defaultdict
 from collections.abc import Sequence
@@ -20,16 +18,14 @@ from rotkehlchen.assets.converters import asset_from_kraken
 from rotkehlchen.constants import (
     KRAKEN_API_VERSION,
     KRAKEN_BASE_URL,
-    KRAKEN_FUTURES_API_VERSION,
     ZERO,
 )
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
-from rotkehlchen.constants.misc import KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_BASE_URL_PATH
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.kraken.krakenbase import KrakenBase, KrakenAccountType, _check_and_get_response
+from rotkehlchen.exchanges.krakenbase import KrakenBase, KrakenAccountType, _check_and_get_response
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
     create_asset_movement_with_fee,
@@ -53,6 +49,7 @@ from rotkehlchen.types import (
     TimestampMS,
 )
 from rotkehlchen.utils.misc import pairwise, ts_ms_to_sec
+from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
 from rotkehlchen.utils.mixins.lockable import protect_with_lock
 
 if TYPE_CHECKING:
@@ -208,6 +205,8 @@ class Kraken(KrakenBase):
 
         return result
 
+    @protect_with_lock()
+    @cache_response_timewise()
     def query_balances(self):
         return self.query_balances_base('Balance')
 

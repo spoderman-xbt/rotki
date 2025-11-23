@@ -1,12 +1,11 @@
 import json
 import random
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from rotkehlchen.db.dbhandler import DBHandler
 from rotkehlchen.errors.misc import RemoteError
-from rotkehlchen.exchanges.kraken.kraken import Kraken
+from rotkehlchen.exchanges.kraken import Kraken
 from rotkehlchen.fval import FVal
 from rotkehlchen.globaldb.handler import GlobalDBHandler
 from rotkehlchen.tests.utils.factories import (

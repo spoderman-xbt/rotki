@@ -2,8 +2,8 @@ import base64
 
 import pytest
 
-from rotkehlchen.exchanges.kraken.krakenbase import KrakenAccountType
-from rotkehlchen.exchanges.kraken.krakenfutures import KrakenFutures
+from rotkehlchen.exchanges.krakenbase import KrakenAccountType
+from rotkehlchen.exchanges.krakenfutures import Krakenfutures
 from rotkehlchen.tests.utils.exchanges import create_test_kraken
 
 DEMO_KRAKEN_FUTURES_API_KEY = 'QjqMVj9JlFgU6OWQBJ07gTcc6k14coxcT1CsjE31AujndTdPRlHcpxCt'
@@ -44,7 +44,7 @@ def fixture_demo_kraken_futures(
         kraken_demo_api_secret,
         kraken_futures_test_base_uri,
 ):
-    return KrakenFutures(
+    return Krakenfutures(
         name='demo_kraken',
         api_key=kraken_demo_api_key,
         secret=base64.b64decode(kraken_demo_api_secret),
