@@ -129,7 +129,12 @@ class Krakenfutures(KrakenBase):
 
         decoded_json = _check_and_get_response(response, method)
 
-        return decoded_json['accounts']['cash']['balances']
+        cash_balances = decoded_json['accounts']['cash']['balances']
+
+        # Make asset tickers all uppercase before returning
+        return {k.upper(): v for k, v in cash_balances.items()}
+
+
 
     @protect_with_lock()
     @cache_response_timewise()

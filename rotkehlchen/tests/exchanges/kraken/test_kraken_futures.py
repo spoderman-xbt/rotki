@@ -1,13 +1,20 @@
 import os
+import warnings as test_warnings
 from unittest import mock
 
 import pytest
+import requests
 
 from rotkehlchen.accounting.structures.balance import Balance
 from rotkehlchen.assets.asset import Asset
+from rotkehlchen.assets.converters import asset_from_kraken
+from rotkehlchen.constants.assets import A_USDC, A_USDT
+from rotkehlchen.errors.asset import UnknownAsset
+from rotkehlchen.errors.serialization import DeserializationError
 from rotkehlchen.exchanges.krakenfutures import Krakenfutures
 from rotkehlchen.fval import FVal
 from rotkehlchen.tests.utils.exchanges import get_exchange_asset_symbols
+from rotkehlchen.tests.utils.kraken import KRAKEN_DELISTED
 from rotkehlchen.types import Location
 
 
@@ -38,6 +45,15 @@ def test_querying_balances(demo_kraken_futures):
         assert isinstance(entry, Balance)
 
     assert result['USD'] == Balance(FVal(5000), usd_value=FVal(5000))
+    assert result['EUR'] == Balance(FVal(5000), usd_value=FVal(5000))
+    assert result['GBP'] == Balance(FVal(3791.9006), usd_value=FVal(3791.9006))
+    assert result['BTC'].amount > 0
+    assert result['ETH'].amount > 0
+    assert result['LTC'].amount > 0
+    assert result['BCH'].amount > 0
+    assert result['XRP'].amount > 0
+    assert result[A_USDC.identifier].amount > 0
+    assert result[A_USDT.identifier].amount > 0
 
 
 
@@ -77,74 +93,75 @@ def test_name():
     assert exchange.name == 'kraken1'
 
 
+# TODO: This test might not be needed? OR just assert that it uses Kraken spot assets (how to do that?)
 @pytest.mark.asset_test
 def test_coverage_of_kraken_balances():
     # TODO: Could not find mapping for usdt and usdc
-    response = requests.get('https://api.kraken.com/0/public/Assets')
+    response = requests.get('https://futures.kraken.com/derivatives/api/v3/tickers')  # This is futures contracts?
     got_assets = set(response.json()['result'].keys())
     expected_assets = get_exchange_asset_symbols(
-        exchange=Location.KRAKEN,
+        exchange=Location.KRAKEN,  # TODO: change to KRaken Futures?
         query_suffix=';',  # exclude false-positives of delisted assets
     )
 
-    # Special/staking assets and which assets they should map to
-    special_assets = {
-        'XTZ.S': Asset('XTZ'),
-        'DOT.S': A_DOT,
-        'ATOM.S': Asset('ATOM'),
-        'EUR.M': A_EUR,
-        'USD.M': A_USD,
-        'XBT.M': A_BTC,
-        'KSM.S': A_KSM,
-        'ETH2.S': A_ETH2,
-        'KAVA.S': Asset('KAVA'),
-        'EUR.HOLD': A_EUR,
-        'USD.HOLD': A_USD,
-        'FLOW.S': Asset('FLOW'),
-        'FLOWH.S': Asset('FLOW'),
-        'FLOWH': Asset('FLOW'),
-        'ADA.S': A_ADA,
-        'SOL.S': Asset('SOL'),
-        'KSM.P': A_KSM,  # kusama bonded for parachains
-        'ALGO.S': Asset('ALGO'),
-        'DOT.P': A_DOT,
-        'MINA.S': Asset('MINA'),
-        'TRX.S': strethaddress_to_identifier('0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5'),
-        'LUNA.S': strethaddress_to_identifier('0xd2877702675e6cEb975b4A1dFf9fb7BAF4C91ea9'),
-        'SCRT.S': Asset('SCRT'),
-        'MATIC.S': strethaddress_to_identifier('0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0'),
-        'GBP.HOLD': Asset('GBP'),
-        'CHF.HOLD': Asset('CHF'),
-        'CAD.HOLD': Asset('CAD'),
-        'AUD.HOLD': Asset('AUD'),
-        'AED.HOLD': Asset('AED'),
-        'USDC.M': A_USDC,
-        'GRT.S': A_GRT,
-        'FLR.S': Asset('FLR'),
-        'USDT.M': A_USDT,
-        'DOT28.S': A_DOT,
-        'GRT28.S': A_GRT,
-        'SCRT21.S': Asset('SCRT'),
-        'KAVA21.S': Asset('KAVA'),
-        'ATOM21.S': Asset('ATOM'),
-        'SOL03.S': Asset('SOL'),
-        'FLOW14.S': Asset('FLOW'),
-        'MATIC04.S': strethaddress_to_identifier('0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0'),
-        'KSM07.S': A_KSM,
-    }
-    missing_assets = {
-        'ZARS',  # doesn't appear yet in the platform
-        'ZMXN',  # not listed yet in the platform
-    }
+    # # Special/staking assets and which assets they should map to
+    # special_assets = {
+    #     'XTZ.S': Asset('XTZ'),
+    #     'DOT.S': A_DOT,
+    #     'ATOM.S': Asset('ATOM'),
+    #     'EUR.M': A_EUR,
+    #     'USD.M': A_USD,
+    #     'XBT.M': A_BTC,
+    #     'KSM.S': A_KSM,
+    #     'ETH2.S': A_ETH2,
+    #     'KAVA.S': Asset('KAVA'),
+    #     'EUR.HOLD': A_EUR,
+    #     'USD.HOLD': A_USD,
+    #     'FLOW.S': Asset('FLOW'),
+    #     'FLOWH.S': Asset('FLOW'),
+    #     'FLOWH': Asset('FLOW'),
+    #     'ADA.S': A_ADA,
+    #     'SOL.S': Asset('SOL'),
+    #     'KSM.P': A_KSM,  # kusama bonded for parachains
+    #     'ALGO.S': Asset('ALGO'),
+    #     'DOT.P': A_DOT,
+    #     'MINA.S': Asset('MINA'),
+    #     'TRX.S': strethaddress_to_identifier('0x50327c6c5a14DCaDE707ABad2E27eB517df87AB5'),
+    #     'LUNA.S': strethaddress_to_identifier('0xd2877702675e6cEb975b4A1dFf9fb7BAF4C91ea9'),
+    #     'SCRT.S': Asset('SCRT'),
+    #     'MATIC.S': strethaddress_to_identifier('0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0'),
+    #     'GBP.HOLD': Asset('GBP'),
+    #     'CHF.HOLD': Asset('CHF'),
+    #     'CAD.HOLD': Asset('CAD'),
+    #     'AUD.HOLD': Asset('AUD'),
+    #     'AED.HOLD': Asset('AED'),
+    #     'USDC.M': A_USDC,
+    #     'GRT.S': A_GRT,
+    #     'FLR.S': Asset('FLR'),
+    #     'USDT.M': A_USDT,
+    #     'DOT28.S': A_DOT,
+    #     'GRT28.S': A_GRT,
+    #     'SCRT21.S': Asset('SCRT'),
+    #     'KAVA21.S': Asset('KAVA'),
+    #     'ATOM21.S': Asset('ATOM'),
+    #     'SOL03.S': Asset('SOL'),
+    #     'FLOW14.S': Asset('FLOW'),
+    #     'MATIC04.S': strethaddress_to_identifier('0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0'),
+    #     'KSM07.S': A_KSM,
+    # }
+    # missing_assets = {
+    #     'ZARS',  # doesn't appear yet in the platform
+    #     'ZMXN',  # not listed yet in the platform
+    # }
 
     for kraken_asset in got_assets:
-        if kraken_asset in special_assets:
-            assert asset_from_kraken(kraken_asset) == special_assets[kraken_asset]
-        elif kraken_asset not in KRAKEN_DELISTED:
+        # if kraken_asset in special_assets:
+        #     assert asset_from_kraken(kraken_asset) == special_assets[kraken_asset]
+        if kraken_asset not in KRAKEN_DELISTED:
             try:
                 asset_from_kraken(kraken_asset)
             except (DeserializationError, UnknownAsset):
-                if kraken_asset not in missing_assets:
+                # if kraken_asset not in missing_assets:
                     test_warnings.warn(UserWarning(
                         f'Found unknown primary asset {kraken_asset} in kraken. '
                         f'Support for it has to be added',
