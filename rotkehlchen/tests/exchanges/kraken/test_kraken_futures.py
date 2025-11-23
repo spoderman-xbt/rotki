@@ -25,6 +25,8 @@ def test_querying_balances(demo_kraken_futures):
         assert isinstance(asset, Asset)
         assert isinstance(entry, Balance)
 
+    assert result['USD'] == 5000
+
 
 
 # @pytest.mark.skipif('CI' in os.environ, reason='temporarily skip kraken in CI')

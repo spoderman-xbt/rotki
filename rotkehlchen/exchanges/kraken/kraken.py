@@ -127,10 +127,10 @@ class Kraken(KrakenBase):
             kraken_account_type=kraken_account_type,
         )
         # Kraken provides base64-encoded secrets, decode it for use with mixin methods
-        if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
-            self.secret = ApiSecret(self.secret)
-        else:
-            self.secret = ApiSecret(base64.b64decode(self.secret))
+        # if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
+        self.secret = ApiSecret(self.secret)
+        # else:
+        #     self.secret = ApiSecret(base64.b64decode(self.secret))
 
     def validate_api_key(self) -> tuple[bool, str]:
         """Validates that the Kraken API Key is good for usage in Rotkehlchen
@@ -244,7 +244,7 @@ class Kraken(KrakenBase):
         return _check_and_get_response(response, method)
 
     def query_balances(self):
-        return self.query_balances_base('Balances')
+        return self.query_balances_base('Balance')
 
     def process_kraken_events_for_trade(
             self,
