@@ -200,49 +200,6 @@ class Kraken(KrakenBase):
 
         return _check_and_get_response(response, method)
 
-    def _query_futures(self, method: str, req: dict | None = None) -> dict | str:
-        """API queries that require a valid key/secret pair.
-
-        Arguments:
-        method -- API method name (string, no default)
-        req    -- additional API request parameters (default: {})
-
-        """
-        if req is None:
-            req = {}
-
-        urlpath: str = os.path.join(KRAKEN_FUTURES_BASE_URL_PATH, KRAKEN_FUTURES_API_VERSION, method if method is not None else "")
-        urlpath_without_prefix = urlpath.removeprefix("/derivatives")  # TODO: Could prob make nicer in setup/constants
-
-        req['nonce'] = str(int(1000 * time.time()))
-        # post_data = urlencode(req)
-        post_data = ""
-
-        # any unicode strings must be turned to bytes
-        hashable = (post_data + req['nonce'] + urlpath_without_prefix).encode()
-        message = hashlib.sha256(hashable).digest()
-        signature = self.generate_hmac_b64_signature(
-            message=message,
-            digest_algorithm=hashlib.sha512,
-        )
-        self.session.headers.update({
-            'APIKey': self.api_key,
-            'Nonce': req['nonce'],
-            'Authent': signature,
-        })
-        try:
-            full_url = KRAKEN_FUTURES_BASE_URL + urlpath
-            log.debug(f'Querying Kraken for {method} with {req} at URL: {full_url}')
-            response = self.session.get(
-                full_url,
-                timeout=CachedSettings().get_timeout_tuple(),
-            )
-        except requests.exceptions.RequestException as e:
-            raise RemoteError(f'Kraken API request failed due to {e!s}') from e
-        self._manage_call_counter(method)
-
-        return _check_and_get_response(response, method)
-
     def query_balances(self):
         return self.query_balances_base('Balance')
 
