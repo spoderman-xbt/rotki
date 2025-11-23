@@ -93,10 +93,8 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
         # else
         raise RemoteError(error)
 
-    if isinstance(decoded_json, str):
-        return decoded_json
-
     return decoded_json
+
 
 
 class KrakenAccountType(SerializableEnumNameMixin):

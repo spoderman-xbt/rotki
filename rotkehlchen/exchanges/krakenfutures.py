@@ -121,7 +121,7 @@ class Krakenfutures(KrakenBase):
         decoded_json = _check_and_get_response(response, method)
 
         if decoded_json is str:
-            raise RemoteError(decoded_json)
+            return decoded_json
 
         cash_balances = decoded_json['accounts']['cash']['balances']
 
