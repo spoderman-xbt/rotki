@@ -1,7 +1,7 @@
 """
 Module specific to Kraken's spot and margin offerings
 """
-
+import base64
 import hashlib
 import itertools
 import logging
@@ -119,10 +119,7 @@ class Kraken(KrakenBase):
             kraken_account_type=kraken_account_type,
         )
         # Kraken provides base64-encoded secrets, decode it for use with mixin methods
-        # if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
-        self.secret = ApiSecret(self.secret)
-        # else:
-        #     self.secret = ApiSecret(base64.b64decode(self.secret))
+        self.secret = ApiSecret(base64.b64decode(self.secret))
 
     def validate_api_key(self) -> tuple[bool, str]:
         """Validates that the Kraken API Key is good for usage in Rotkehlchen

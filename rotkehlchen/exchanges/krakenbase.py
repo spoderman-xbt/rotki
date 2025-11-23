@@ -125,12 +125,6 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
             database=database,
             msg_aggregator=msg_aggregator,
         )
-        # Kraken provides base64-encoded secrets, decode it for use with mixin methods
-        if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
-            self.secret = ApiSecret(self.secret)
-        else:
-            self.secret = ApiSecret(base64.b64decode(self.secret))
-
         self.base_uri = base_uri
 
         self.session.headers.update({'API-Key': self.api_key})

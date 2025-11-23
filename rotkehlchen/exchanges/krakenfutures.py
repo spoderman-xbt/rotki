@@ -65,11 +65,7 @@ class Krakenfutures(KrakenBase):
             base_uri=base_uri,
             kraken_account_type=kraken_account_type,
         )
-        # Kraken provides base64-encoded secrets, decode it for use with mixin methods
-        # if name == 'demo_kraken':  # TODO: Remove test dependent code from PROD
         self.secret = ApiSecret(self.secret)
-        # else:  # TODO: See if this is the case for PROD
-        #     self.secret = ApiSecret(base64.b64decode(self.secret))
 
     def validate_api_key(self) -> tuple[bool, str]:
         """Validates that the Kraken API Key is good for usage in Rotkehlchen
