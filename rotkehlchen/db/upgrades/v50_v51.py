@@ -53,5 +53,4 @@ def upgrade_v50_to_v51(db: 'DBHandler', progress_handler: 'DBUpgradeProgressHand
         INSERT OR IGNORE INTO location(location, seq) VALUES ('x', 56);
         """)
 
-
     perform_userdb_upgrade_steps(db=db, progress_handler=progress_handler, should_vacuum=True)

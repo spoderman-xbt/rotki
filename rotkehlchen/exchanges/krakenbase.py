@@ -73,10 +73,8 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
             f'Kraken API request {response.url} for {method} failed with HTTP status '
             f'code: {response.status_code}')
 
+    log.debug(f'got response from Kraken with content: {response.content}')
     try:
-        log.debug(f'KRAKEN FUTURES RESPONSE: {response}')
-        log.debug(f'KRAKEN FUTURES RESPONSE TEXT: {response.text}')
-        log.debug(f'KRAKEN FUTURES RESPONSE CONTENT: {response.content}')
         decoded_json = jsonloads_dict(response.text)
     except json.decoder.JSONDecodeError as e:
         raise RemoteError(f'Invalid JSON in Kraken response. {e}') from e
