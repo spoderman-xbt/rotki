@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any
 import requests
 
 from rotkehlchen.accounting.structures.balance import Balance
-from rotkehlchen.assets.asset import AssetWithOracles
-from rotkehlchen.assets.converters import asset_from_kraken
 from rotkehlchen.constants import (
     KRAKEN_FUTURES_API_VERSION,
 )
@@ -21,7 +19,6 @@ from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.exchanges.exchange import ExchangeQueryBalances
 from rotkehlchen.exchanges.krakenbase import KrakenAccountType, KrakenBase, _check_and_get_response
 from rotkehlchen.logging import RotkehlchenLogsAdapter
-from rotkehlchen.tests.utils import mock
 from rotkehlchen.types import (
     ApiKey,
     ApiSecret,
@@ -75,69 +72,52 @@ class Krakenfutures(KrakenBase):
 
         return True, ''
 
+    def edit_exchange_extras(self, extras: dict) -> tuple[bool, str]:
+        return True, ''  # do nothing
+
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
     def query_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
-        raw_balances = self.query_balances_base('accounts')
-        if isinstance(raw_balances, tuple):
-            return raw_balances
+        raw_balances, msg = self.query_balances_base('accounts')
+        log.debug(f'got Kraken Futures raw balances = {raw_balances}')
+        if raw_balances is None:
+            return raw_balances, msg
 
         accounts: dict = self._get_inner_dict(raw_balances, 'accounts')
         cash: dict = self._get_inner_dict(accounts, 'cash')
         cash_balances: dict = self._get_inner_dict(cash, 'balances')
         flex: dict = self._get_inner_dict(accounts, 'flex')
         flex_currencies: dict = self._get_inner_dict(flex, 'currencies')
+        log.debug(f'Kraken Futures cash balances = {cash_balances}')
+        log.debug(f'Kraken Futures flex currencies = {flex_currencies}')
 
-        # add single collateral futures balances to cash balances
-        for account in accounts:
-            if account.startswith('fi_'):  # TODO: Figure out 'fv_'
-                collateral_dict = accounts[account]
-                currency = collateral_dict.get('currency')
-                cash_balances[currency] += collateral_dict.get('balances').get(currency)
+        self._add_single_collateral_futures_margin_to_cash_balances(accounts, cash_balances)
 
         upper_kraken_names = defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
-
-        find_usd_price_mock = mock.patch(
-            'rotkehlchen.inquirer.Inquirer.find_usd_price',
-            return_value=90_000,
-        )
-
-        with find_usd_price_mock:
-            cash_and_single_deserialized, msg = self.deserialize_kraken_balance(upper_kraken_names)
-            if msg:
-                return None, msg
-
-        newdict = defaultdict(float)
-        for currency in flex_currencies:
-            flex_collateral: dict = flex_currencies.get(currency)
-            try:
-                newdict[currency] += flex_collateral.get('quantity', 0)
-            except KeyError as e:
-                log.error(f'kraken multi collat asset name {currency} does not match rotki name')
-                raise e
-
-        flex_deserialized, msg= self.deserialize_kraken_balance(newdict)
+        cash_and_single_deserialized, msg = self.deserialize_kraken_balance(upper_kraken_names)
         if msg:
             return None, msg
 
-        merged = {
+        flex_balances = self._parse_multi_collateral_futures_margin(flex_currencies)
+        flex_deserialized, msg = self.deserialize_kraken_balance(flex_balances)
+        if msg:
+            return None, msg
+
+        log.debug(f'deserialized Kraken Futures flex margin = {flex_deserialized}')
+        total_futures_balances = {
             currency:
                 Balance(
-                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).amount + flex_deserialized.get(currency, Balance(ZERO, ZERO)).amount,
-                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value + flex_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value,
+                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).amount
+                        + flex_deserialized.get(currency, Balance(ZERO, ZERO)).amount,
+                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value
+                        + flex_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value,
                 )
             for currency in cash_and_single_deserialized.keys() | flex_deserialized.keys()
         }
 
-        return merged, ''
-
-    # def get_cash_balances(self, cash: dict, method: str) -> defaultdict[Any, Any]:
-    #     cash_balances: dict = self._get_inner_dict(cash, 'balances', method)
-
-
-    def edit_exchange_extras(self, extras: dict) -> tuple[bool, str]:
-        return True, ''  # do nothing
+        log.debug(f'total Kraken Futures balances = {flex_deserialized}')
+        return total_futures_balances, ''
 
     def query_private_api_method(self, method: str, req: dict | None = None) -> dict | str:
         """API queries that require a valid key/secret pair.
@@ -174,17 +154,42 @@ class Krakenfutures(KrakenBase):
                 full_url,
                 timeout=CachedSettings().get_timeout_tuple(),
             )
+            log.debug(f'raw response from kraken for API method {method} = {response}')
         except requests.exceptions.RequestException as e:
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
 
         return _check_and_get_response(response, method)
 
-
     @staticmethod
     def _get_inner_dict(dictionary: dict, inner_dict_keyname: str) -> dict:
         result: dict | None = dictionary.get(inner_dict_keyname)
         if result is None:
-            raise RemoteError(f'Missing result in kraken futures response for accounts')
+            raise RemoteError('Missing result in kraken futures response for accounts')
 
         return result
+
+    def _parse_multi_collateral_futures_margin(
+            self, flex_currencies: dict,
+    ) -> defaultdict[Any, float]:
+        newdict: defaultdict = defaultdict(float)
+        for currency, flex_collateral in flex_currencies.items():
+            try:
+                newdict[currency] += flex_collateral.get('quantity', 0)
+            except KeyError as e:
+                log.error(
+                    f'kraken multi collateral asset name {currency} does not match rotki name')
+                self.send_unknown_asset_message(
+                    asset_identifier=str(e),
+                    details='balance query',
+                )
+                continue
+
+        return newdict
+
+    @staticmethod
+    def _add_single_collateral_futures_margin_to_cash_balances(accounts: dict[str, dict], cash_balances: dict) -> None:  # noqa: E501
+        for account, collateral_dict in accounts.items():
+            if account.startswith('fi_'):
+                currency = collateral_dict.get('currency')
+                cash_balances[currency] += collateral_dict['balances'].get(currency)

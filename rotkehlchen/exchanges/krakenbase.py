@@ -39,9 +39,7 @@ from rotkehlchen.types import (
     Timestamp,
 )
 from rotkehlchen.utils.misc import ts_now
-from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
 from rotkehlchen.utils.mixins.enums import SerializableEnumNameMixin
-from rotkehlchen.utils.mixins.lockable import protect_with_lock
 from rotkehlchen.utils.serialization import jsonloads_dict
 
 if TYPE_CHECKING:
@@ -271,10 +269,7 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
         for retrieving balance information.
         """
 
-    # ---- General exchanges interface ----
-    @protect_with_lock()
-    @cache_response_timewise()
-    def query_balances_base(self, method: str) -> dict | tuple[None, str]:
+    def query_balances_base(self, method: str) -> tuple[dict | None, str]:
         try:
             kraken_balances = self.api_query(method, req={})
             log.info(f'got kraken {self.location} balances: {kraken_balances}')
@@ -290,9 +285,9 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
                 log.error(msg)
                 return None, msg
 
-        return kraken_balances
+        return kraken_balances, ''
 
-    def deserialize_kraken_balance(self, kraken_balances: dict) -> ExchangeQueryBalances:
+    def deserialize_kraken_balance(self, kraken_balances: dict) -> tuple[dict, str]:
         assets_balance: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
         for kraken_name, amount_ in kraken_balances.items():
             log.debug(f'deserializing kraken balance for {kraken_name} with amount: {amount_}')

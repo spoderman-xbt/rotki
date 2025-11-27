@@ -47,9 +47,6 @@ def asset_from_kraken(kraken_name: str) -> AssetWithOracles:
     - DeserializationError
     - UnknownAsset
     """
-    # if isinstance(kraken_name, AssetWithOracles):
-    #     return kraken_name  # already converted
-
     if not isinstance(kraken_name, str):
         raise DeserializationError(f'Got non-string type {type(kraken_name)} for kraken asset')
 
@@ -75,8 +72,6 @@ def asset_from_kraken(kraken_name: str) -> AssetWithOracles:
         name = 'DOGE'
     elif kraken_name == 'FLOWH':
         name = 'FLOW'
-    elif kraken_name == 'USD CREDIT':
-        name = 'USD'
     elif kraken_name in {'ETH', 'EUR', 'USD', 'GBP', 'CAD', 'JPY', 'KRW', 'CHF', 'AUD'}:
         name = kraken_name
     else:
