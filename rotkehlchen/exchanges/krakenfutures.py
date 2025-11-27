@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import requests
 
+from rotkehlchen.assets.converters import asset_from_kraken
 from rotkehlchen.constants import (
     KRAKEN_FUTURES_API_VERSION,
 )
@@ -137,16 +138,22 @@ class Krakenfutures(KrakenBase):
                 currency = collateral_dict.get('currency')
                 cash_balances[currency] += collateral_dict.get('balances').get(currency)
 
+        upper_kraken_names = defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
+        new_dict = {}
+        for k, v in upper_kraken_names.items():
+            rotki_name = asset_from_kraken(k)
+            log.info(f'Turning kraken asset name {k} into rotki name {rotki_name}')
+            new_dict[rotki_name] = v
+
         for currency in flex_currencies:
-            kraken_name = currency.lower()
-            if kraken_name == 'btc':
-                kraken_name = 'xbt'
             flex_collateral: dict = flex_currencies.get(currency)
-            cash_balances[kraken_name] += flex_collateral.get('quantity')
+            try:
+                new_dict[currency] += flex_collateral.get('quantity')
+            except KeyError as e:
+                log.error(f'kraken multi collat asset name {currency} does not match rotki name')
+                raise e
 
-
-        # Make asset tickers all uppercase before returning to align them with Kraken spot
-        return defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
+        return new_dict
 
     # def get_cash_balances(self, cash: dict, method: str) -> defaultdict[Any, Any]:
     #     cash_balances: dict = self._get_inner_dict(cash, 'balances', method)
