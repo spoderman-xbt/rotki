@@ -47,8 +47,8 @@ def asset_from_kraken(kraken_name: str) -> AssetWithOracles:
     - DeserializationError
     - UnknownAsset
     """
-    if isinstance(kraken_name, AssetWithOracles):
-        return kraken_name  # already converted
+    # if isinstance(kraken_name, AssetWithOracles):
+    #     return kraken_name  # already converted
 
     if not isinstance(kraken_name, str):
         raise DeserializationError(f'Got non-string type {type(kraken_name)} for kraken asset')

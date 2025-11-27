@@ -210,7 +210,8 @@ class Kraken(KrakenBase):
     @protect_with_lock()
     @cache_response_timewise()
     def query_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
-        return self.query_balances_base('Balance')
+        raw_balances = self.query_balances_base('Balance')
+        return self.deserialize_kraken_balance(raw_balances)
 
     def process_kraken_events_for_trade(
             self,

@@ -274,7 +274,7 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
-    def query_balances_base(self, method: str) -> ExchangeQueryBalances:
+    def query_balances_base(self, method: str) -> dict | tuple[None, str]:
         try:
             kraken_balances = self.api_query(method, req={})
             log.info(f'got kraken {self.location} balances: {kraken_balances}')
@@ -290,6 +290,9 @@ class KrakenBase(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorM
                 log.error(msg)
                 return None, msg
 
+        return kraken_balances
+
+    def deserialize_kraken_balance(self, kraken_balances: dict) -> ExchangeQueryBalances:
         assets_balance: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
         for kraken_name, amount_ in kraken_balances.items():
             log.debug(f'deserializing kraken balance for {kraken_name} with amount: {amount_}')

@@ -25,12 +25,12 @@ def test_kraken_validate_key(demo_kraken_futures):
 
 
 def test_querying_balances(demo_kraken_futures):
-    # find_usd_price_mock = mock.patch(
-    #     'rotkehlchen.inquirer.Inquirer.find_usd_price',
-    #     return_value=90_000,
-    # )
-    # with find_usd_price_mock:
-    balances, error_or_empty = demo_kraken_futures.query_balances()
+    find_usd_price_mock = mock.patch(
+        'rotkehlchen.inquirer.Inquirer.find_usd_price',
+        return_value=90_000,
+    )
+    with find_usd_price_mock:
+        balances, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''
     assert isinstance(balances, dict)
     for asset, entry in balances.items():
@@ -39,27 +39,25 @@ def test_querying_balances(demo_kraken_futures):
 
     total = 0
     for currency in balances:
-        print(f'TOTAL {currency} BALANCE = {balances[currency].amount}')
-        print(f'TOTAL {currency} USD VALUE= {balances[currency].usd_value}')
+        print(f'TOTAL {currency} USD VALUE = {balances[currency].usd_value}')
         total += balances[currency].usd_value
     print(f'SUM TOTAL BALANCE = ${total}')
-    return
 
-    assert balances[A_USD].amount == FVal('5000')
+    assert balances[A_USD].amount == FVal('10076.53008268181')
     assert balances[A_USD].usd_value > ZERO
-    assert balances[A_EUR].amount == FVal('5000')
+    assert balances[A_EUR].amount == FVal('10000')
     assert balances[A_EUR].usd_value > ZERO
     assert balances[A_GBP].amount == FVal('3791.9006')
     assert balances[A_GBP].usd_value > ZERO
-    assert balances[A_ETH].amount == FVal('1.5717981686')
+    assert balances[A_ETH].amount == FVal('4.7153945058')
     assert balances[A_ETH].usd_value > ZERO
-    assert balances[A_LTC].amount == FVal('52.1910861801')
+    assert balances[A_LTC].amount == FVal('104.3821723602')
     assert balances[A_LTC].usd_value > ZERO
-    assert balances[A_BTC].amount == FVal('0.0524990493')
+    assert balances[A_BTC].amount == FVal('0.1574971479')
     assert balances[A_BTC].usd_value > ZERO
-    assert balances[A_BCH].amount == FVal('10.0184941402')
+    assert balances[A_BCH].amount == FVal('20.0369882804')
     assert balances[A_BCH].usd_value > ZERO
-    assert balances[A_XRP].amount == FVal('2213.8685582')
+    assert balances[A_XRP].amount == FVal('4427.7371164')
     assert balances[A_XRP].usd_value > ZERO
     assert balances[A_USDC.identifier].amount == FVal('5000.65008452')
     assert balances[A_USDC.identifier].usd_value > ZERO
