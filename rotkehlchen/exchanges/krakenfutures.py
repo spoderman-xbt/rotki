@@ -128,16 +128,22 @@ class Krakenfutures(KrakenBase):
         cash: dict = self._get_inner_dict(accounts, 'cash', method)
         cash_balances: dict = self._get_inner_dict(cash, 'balances', method)
         flex: dict = self._get_inner_dict(accounts, 'flex', method)
-        currencies: dict = self._get_inner_dict(flex, 'currencies', method)
+        flex_currencies: dict = self._get_inner_dict(flex, 'currencies', method)
 
         # add single collateral futures balances to cash balances
-        for k in accounts:
-            if k.startswith('fi_'):  # TODO: Figure out 'fv_'
-                v = accounts[k]
-                currency = v.get('currency')
-                cash_balances[currency] += v.get('balances').get(currency)
+        for account in accounts:
+            if account.startswith('fi_'):  # TODO: Figure out 'fv_'
+                collateral_dict = accounts[account]
+                currency = collateral_dict.get('currency')
+                cash_balances[currency] += collateral_dict.get('balances').get(currency)
 
-    # TODO: flex balances
+        for currency in flex_currencies:
+            kraken_name = currency.lower()
+            if kraken_name == 'btc':
+                kraken_name = 'xbt'
+            flex_collateral: dict = flex_currencies.get(currency)
+            cash_balances[kraken_name] += flex_collateral.get('quantity')
+
 
         # Make asset tickers all uppercase before returning to align them with Kraken spot
         return defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
