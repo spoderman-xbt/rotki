@@ -4,6 +4,7 @@ Module specific to Kraken's futures platform
 import hashlib
 import logging
 import time
+from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 import requests
@@ -126,9 +127,23 @@ class Krakenfutures(KrakenBase):
         accounts: dict = self._get_inner_dict(decoded_json, 'accounts', method)
         cash: dict = self._get_inner_dict(accounts, 'cash', method)
         cash_balances: dict = self._get_inner_dict(cash, 'balances', method)
+        flex: dict = self._get_inner_dict(accounts, 'flex', method)
+        currencies: dict = self._get_inner_dict(flex, 'currencies', method)
+
+        # add single collateral futures balances to cash balances
+        for k in accounts:
+            if k.startswith('fi_'):  # TODO: Figure out 'fv_'
+                v = accounts[k]
+                currency = v.get('currency')
+                cash_balances[currency] += v.get('balances').get(currency)
+
+    # TODO: flex balances
 
         # Make asset tickers all uppercase before returning to align them with Kraken spot
-        return {k.upper(): v for k, v in cash_balances.items()}
+        return defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
+
+    # def get_cash_balances(self, cash: dict, method: str) -> defaultdict[Any, Any]:
+    #     cash_balances: dict = self._get_inner_dict(cash, 'balances', method)
 
     @staticmethod
     def _get_inner_dict(dictionary: dict, inner_dict_keyname: str, method: str) -> dict:
