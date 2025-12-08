@@ -164,7 +164,6 @@ describe('settings:frontend', () => {
       dateInputFormat: DateFormat.DateMonthYearHourMinuteSecond,
       versionUpdateCheckFrequency: 24,
       enableAliasNames: true,
-      enablePasswordConfirmation: true,
       blockchainRefreshButtonBehaviour: BlockchainRefreshButtonBehaviour.ONLY_REFRESH_BALANCES,
       subscriptDecimals: false,
       savedFilters: {},
@@ -180,8 +179,6 @@ describe('settings:frontend', () => {
       persistPrivacySettings: false,
       evmQueryIndicatorMinOutOfSyncPeriod: 12,
       evmQueryIndicatorDismissalThreshold: 6,
-      lastPasswordConfirmed: 0,
-      passwordConfirmationInterval: 604800,
     };
 
     store.update(state);

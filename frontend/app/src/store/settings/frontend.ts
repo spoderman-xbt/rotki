@@ -17,7 +17,6 @@ export const useFrontendSettingsStore = defineStore('settings/frontend', () => {
   const settings = ref<FrontendSettings>(markRaw(getDefaultFrontendSettings()));
 
   const defiSetupDone = useComputedRef(settings, 'defiSetupDone');
-  const enablePasswordConfirmation = useComputedRef(settings, 'enablePasswordConfirmation');
   const language = useComputedRef(settings, 'language');
   const timeframeSetting = useComputedRef(settings, 'timeframeSetting');
   const visibleTimeframes = useComputedRef(settings, 'visibleTimeframes');
@@ -61,8 +60,6 @@ export const useFrontendSettingsStore = defineStore('settings/frontend', () => {
   const scrambleMultiplier = useComputedRef(settings, 'scrambleMultiplier');
   const evmQueryIndicatorMinOutOfSyncPeriod = useComputedRef(settings, 'evmQueryIndicatorMinOutOfSyncPeriod');
   const evmQueryIndicatorDismissalThreshold = useComputedRef(settings, 'evmQueryIndicatorDismissalThreshold');
-  const lastPasswordConfirmed = useComputedRef(settings, 'lastPasswordConfirmed');
-  const passwordConfirmationInterval = useComputedRef(settings, 'passwordConfirmationInterval');
 
   const shouldShowAmount = computed(() => get(privacyMode) < PrivacyMode.SEMI_PRIVATE);
   const shouldShowPercentage = computed(() => get(privacyMode) < PrivacyMode.PRIVATE);
@@ -136,7 +133,6 @@ export const useFrontendSettingsStore = defineStore('settings/frontend', () => {
     defaultThemeVersion,
     defiSetupDone,
     enableAliasNames,
-    enablePasswordConfirmation,
     evmQueryIndicatorDismissalThreshold,
     evmQueryIndicatorMinOutOfSyncPeriod,
     explorers,
@@ -145,12 +141,10 @@ export const useFrontendSettingsStore = defineStore('settings/frontend', () => {
     itemsPerPage,
     language,
     lastKnownTimeframe,
-    lastPasswordConfirmed,
     lightTheme,
     minimumDigitToBeAbbreviated,
     nftsInNetValue,
     notifyNewNfts,
-    passwordConfirmationInterval,
     persistPrivacySettings,
     persistTableSorting,
     privacyMode,
