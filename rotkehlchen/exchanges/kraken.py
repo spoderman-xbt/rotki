@@ -407,7 +407,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 usd_value=balance.usd_value,
             )
 
-        return dict(assets_balance), ''
+        return dict(assets_balance)
 
     def query_until_finished(
             self,
@@ -600,6 +600,30 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
     @protect_with_lock()
     @cache_response_timewise()
     def query_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
+        returned_balances: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
+        futures_balances = self.query_futures_balances()
+        if futures_balances is None:
+            return None, 'Failed to query futures balances'
+
+        for asset, balance in futures_balances.items():
+            returned_balances[asset] += Balance(
+                amount=balance.amount,
+                usd_value=balance.usd_value
+            )
+
+        spot_balances = self.query_spot_balances()
+        if spot_balances is None:
+            return None, 'Failed to query spot balances'
+
+        for asset, balance in spot_balances.items():
+            returned_balances[asset] += Balance(
+                amount=balance.amount,
+                usd_value=balance.usd_value
+            )
+
+        return dict(returned_balances), ''
+
+    def query_spot_balances(self):
         raw_balances, msg = self.query_balances_base('Balance')
         if raw_balances is None:
             return None, msg

@@ -23,6 +23,7 @@ const stateUpdated = defineModel<boolean>('stateUpdated', { required: true });
 const errorMessages = defineModel<ValidationErrors>('errorMessages', { default: () => ({}) });
 
 const editKeys = ref<boolean>(false);
+const editFuturesKeys = ref<boolean>(false);
 
 const locationStore = useLocationStore();
 const { exchangesWithoutApiSecret, exchangesWithPassphrase } = storeToRefs(locationStore);
@@ -122,6 +123,20 @@ const name = computed<string>({
   },
 });
 
+function refWithAsteriskOptional(comp: WritableComputedRef<string>): WritableComputedRef<string> {
+  return computed({
+    get() {
+      if (get(editMode) && !get(editFuturesKeys)) {
+        return asteriskPlaceholder;
+      }
+      return get(comp);
+    },
+    set(value: string) {
+      set(comp, value);
+    },
+  });
+}
+
 const krakenFuturesApiKeyComputed = computed<string>({
   get() {
     const value = get(krakenFuturesApiKey);
@@ -141,6 +156,11 @@ const krakenFuturesApiSecretComputed = computed<string>({
     set(krakenFuturesApiSecret, value || undefined);
   },
 });
+
+
+const krakenFuturesApiKeyModel = refWithAsteriskOptional(krakenFuturesApiKeyComputed);
+const krakenFuturesApiSecretModel = refWithAsteriskOptional(krakenFuturesApiSecretComputed);
+
 
 useFormStateWatcher({
   apiKey,
@@ -168,6 +188,17 @@ function toggleEdit() {
       ...get(modelValue),
       apiKey: '',
       apiSecret: '',
+    });
+  }
+}
+
+function toggleFuturesEdit() {
+  set(editFuturesKeys, !get(editFuturesKeys));
+  if (!get(editFuturesKeys)) {
+    set(modelValue, {
+      ...get(modelValue),
+      krakenFuturesApiKey: '',
+      krakenFuturesApiSecret: '',
     });
   }
 }
@@ -201,29 +232,40 @@ const AtLeastOneKeyset = computed(() => {
       return hasSpot || hasFutures;
 });
 
+const hasFuturesKeys = computed(() => {
+  return !!(get(krakenFuturesApiKey) && get(krakenFuturesApiSecret));
+});
+
+const hasSpotKeys = computed(() => {
+  return !!(get(apiKey) && get(apiSecret));
+});
+
+const spotFieldEditable = logicOr(logicNot(editMode), editKeys);
+const futuresFieldEditable = logicOr(logicNot(editMode), editFuturesKeys);
+
 const v$ = useVuelidate({
   apiKey: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(sensitiveFieldEditable),
+      requiredIf(logicAnd(isKraken, spotFieldEditable)),
     ),
   },
   apiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
+      requiredIf(logicAnd(isKraken, logicAnd(spotFieldEditable, requiresApiSecret))),
     ),
   },
   krakenFuturesApiKey: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-        requiredIf(logicOr(sensitiveFieldEditable, !AtLeastOneKeyset)),
+      requiredIf(logicAnd(isKraken, futuresFieldEditable)),
     ),
   },
   krakenFuturesApiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-        requiredIf(logicOr(sensitiveFieldEditable, !AtLeastOneKeyset)),
+      requiredIf(logicAnd(isKraken, futuresFieldEditable)),
     ),
   },
   binanceMarkets: {
@@ -461,9 +503,35 @@ defineExpose({
     </ExchangeKeysFormStructure>
 
     <template v-if="isKraken">
+        <div
+          class="flex items-center gap-2 text-subtitle-2 pb-4"
+        >
+          {{ t('exchange_settings.kraken_futures_keys') }}
+          <RuiTooltip
+            :popper="{ placement: 'top' }"
+            :open-delay="400"
+          >
+            <template #activator>
+              <RuiButton
+                variant="text"
+                class="!p-2"
+                icon
+                @click="toggleFuturesEdit()"
+              >
+                <RuiIcon
+                  size="20"
+                  :name="!editFuturesKeys ? 'lu-pencil' : 'lu-x'"
+                />
+              </RuiButton>
+            </template>
+            {{
+              !editFuturesKeys ? t('exchange_keys_form.edit.activate_tooltip') : t('exchange_keys_form.edit.deactivate_tooltip')
+            }}
+          </RuiTooltip>
+        </div>
       <Component
           :is="sensitiveInputComponent"
-          v-model.trim="krakenFuturesApiKeyComputed"
+          v-model.trim="krakenFuturesApiKeyModel"
           variant="outlined"
           color="primary"
           :disabled="editMode && !editKeys"
@@ -474,7 +542,7 @@ defineExpose({
       />
       <Component
           :is="sensitiveInputComponent"
-          v-model.trim="krakenFuturesApiSecretComputed"
+          v-model.trim="krakenFuturesApiSecretModel"
           variant="outlined"
           color="primary"
           :disabled="editMode && !editKeys"

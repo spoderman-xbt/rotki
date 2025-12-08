@@ -1243,7 +1243,13 @@ def test_kraken_validate_key(demo_kraken_futures):
 
 
 def test_querying_futures_balances(demo_kraken_futures):
-    balances, error_or_empty = demo_kraken_futures.query_futures_balances()
+    find_usd_price_mock = patch(
+        'rotkehlchen.inquirer.Inquirer.find_usd_price',
+        return_value=90_000,
+    )
+    # balances, error_or_empty = demo_kraken_futures.query_futures_balances()
+    with find_usd_price_mock:
+        balances, error_or_empty = demo_kraken_futures.query_balances()
     assert error_or_empty == ''
     assert isinstance(balances, dict)
     for asset, entry in balances.items():
