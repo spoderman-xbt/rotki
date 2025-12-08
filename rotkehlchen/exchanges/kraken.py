@@ -212,13 +212,13 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.last_query_ts = 0
         self.history_events_db = DBHistoryEvents(self.db)
         self.futures_api_key = kraken_futures_api_key
-        self.futures_api_secret = kraken_futures_api_secret
+        self.futures_api_secret = ApiSecret(base64.b64decode(kraken_futures_api_secret)) if kraken_futures_api_secret is not None else None
         self.base_uri = base_uri
         self.futures_base_uri = futures_base_uri
 
     def set_futures_api_key(self, api_key: ApiKey, api_secret: ApiSecret):
         self.futures_api_key = api_key
-        self.futures_api_secret = api_secret
+        self.futures_api_secret = ApiSecret(base64.b64decode(api_secret)) if api_secret is not None else None
 
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:

@@ -2184,8 +2184,10 @@ class DBHandler:
                     except DeserializationError as e:
                         log.error(f'Couldnt deserialize kraken account type from DB. {e!s}')
                 elif key == KRAKEN_FUTURES_API_KEY_KEY:
+                    log.debug(f'unlocking user with {KRAKEN_FUTURES_API_KEY_KEY} key {entry[1]}')
                     extras[key] = entry[1]
                 elif key == KRAKEN_FUTURES_API_SECRET_KEY:
+                    log.debug(f'unlocking user with {KRAKEN_FUTURES_API_SECRET_KEY} key {entry[1]}')
                     extras[key] = entry[1]
                 elif key == OKX_LOCATION_KEY:
                     try:  # type is checked above
