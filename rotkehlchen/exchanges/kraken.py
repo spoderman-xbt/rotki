@@ -16,6 +16,7 @@ from rotkehlchen.constants import (
 )
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
 from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY
+from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
@@ -181,7 +182,7 @@ def kraken_ledger_entry_type_to_ours(value: str) -> tuple[HistoryEventType, Hist
     return event_type, event_subtype
 
 
-class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
+class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
     def __init__(
             self,
             name: str,
@@ -190,8 +191,8 @@ class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin
             database: 'DBHandler',
             msg_aggregator: 'MessagesAggregator',
             kraken_account_type: KrakenAccountType | None = None,
-            base_uri: str = KRAKEN_BASE_URL,
-            futures_base_uri: str = KRAKEN_FUTURES_BASE_URL,
+            futures_api_key: ApiKey | None = None,
+            futures_api_secret: ApiSecret | None = None,
     ):
         super().__init__(
             name=name,
@@ -200,10 +201,18 @@ class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin
             secret=secret,
             database=database,
             msg_aggregator=msg_aggregator,
-            base_uri=base_uri,
-            futures_base_uri=futures_base_uri,
-            kraken_account_type=kraken_account_type,
         )
+        # Kraken provides base64-encoded secrets, decode it for use with mixin methods
+        self.secret = ApiSecret(base64.b64decode(self.secret))
+        self.session.headers.update({'API-Key': self.api_key})
+        self.set_account_type(kraken_account_type)
+        self.call_counter = 0
+        self.last_query_ts = 0
+        self.history_events_db = DBHistoryEvents(self.db)
+        self.futures_api_key = futures_api_key
+        self.futures_api_secret = futures_api_secret
+        self.base_uri = KRAKEN_BASE_URL,
+        self.futures_base_uri = KRAKEN_FUTURES_BASE_URL,
 
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:
@@ -232,7 +241,6 @@ class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin
 
     def _validate_single_api_key_action(
             self,
-            base_url: str,
             method_str: Literal['Balance', 'TradesHistory', 'Ledgers', 'accounts'],
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
@@ -300,7 +308,10 @@ class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin
                 call_counter=self.call_counter,
             )
 
-            result = self.query_private_api_method(method, req)
+            if method == 'accounts':
+                result = self.query_futures_api_method(method, req)
+            else:
+                result = self.query_private_api_method(method, req)
             if isinstance(result, str) and result != 'success':
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
@@ -1148,7 +1159,7 @@ class Kraken(ABC, ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action(self.base_uri, 'accounts')
+        valid, msg = self._validate_single_api_key_action(self.futures_base_uri, 'accounts')
         if not valid:
             return False, msg
 

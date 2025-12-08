@@ -55,7 +55,7 @@ from rotkehlchen.db.constants import (
     KDF_ITER,
     KRAKEN_ACCOUNT_TYPE_KEY,
     OKX_LOCATION_KEY,
-    USER_CREDENTIAL_MAPPING_KEYS,
+    USER_CREDENTIAL_MAPPING_KEYS, KRAKEN_FUTURES_API_KEY_KEY, KRAKEN_FUTURES_API_SECRET_KEY,
 )
 from rotkehlchen.db.drivers.gevent import DBConnection, DBConnectionType, DBCursor
 from rotkehlchen.db.evmtx import DBEvmTx
@@ -2126,6 +2126,10 @@ class DBHandler:
                         extras[key] = KrakenAccountType.deserialize(entry[1])
                     except DeserializationError as e:
                         log.error(f'Couldnt deserialize kraken account type from DB. {e!s}')
+                elif key == KRAKEN_FUTURES_API_KEY_KEY:
+                    extras[key] = entry[1]
+                elif key == KRAKEN_FUTURES_API_SECRET_KEY:
+                    extras[key] = entry[1]
                 elif key == OKX_LOCATION_KEY:
                     try:  # type is checked above
                         extras[key] = OkxLocation.deserialize(entry[1])  # type: ignore

@@ -278,6 +278,7 @@ class ExchangeManager:
         elif credentials.location == Location.BINANCEUS:
             kwargs['uri'] = BINANCEUS_BASE_URL
 
+        log.warning(f'Exchange extras = {kwargs.items()}')
         params = {
             'name': credentials.name,
             'api_key': credentials.api_key,
@@ -286,6 +287,7 @@ class ExchangeManager:
             # remove all empty kwargs
             **{k: v for k, v in kwargs.items() if v is not None},
         }
+        log.warning(f'Exchange extras unpacked into params = {params}')
         if credentials.location not in EXCHANGES_WITHOUT_API_SECRET:
             params['secret'] = credentials.api_secret
 
