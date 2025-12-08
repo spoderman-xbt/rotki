@@ -194,37 +194,36 @@ const okxLocations = OkxLocation.options.map((item) => {
 
 const sensitiveFieldEditable = logicOr(logicNot(editMode), editKeys);
 
-const hasSpotKeys = computed(() => {
-  return !!(get(apiKey) && get(apiSecret));
-});
-
-const hasFuturesKeys = computed(() => {
-  return !!(get(krakenFuturesApiKey) && get(krakenFuturesApiSecret));
+const AtLeastOneKeyset = computed(() => {
+      if (!get(isKraken)) return true;
+      const hasSpot = get(apiKey) && get(apiSecret);
+      const hasFutures = get(krakenFuturesApiKey) && get(krakenFuturesApiSecret);
+      return hasSpot || hasFutures;
 });
 
 const v$ = useVuelidate({
   apiKey: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(!hasFuturesKeys),
+      requiredIf(sensitiveFieldEditable),
     ),
   },
   apiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(!hasFuturesKeys),
+      requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
     ),
   },
   krakenFuturesApiKey: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(!hasSpotKeys),
+        requiredIf(logicOr(sensitiveFieldEditable, !AtLeastOneKeyset)),
     ),
   },
   krakenFuturesApiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-        requiredIf(!hasSpotKeys),
+        requiredIf(logicOr(sensitiveFieldEditable, !AtLeastOneKeyset)),
     ),
   },
   binanceMarkets: {

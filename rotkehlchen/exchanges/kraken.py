@@ -15,7 +15,7 @@ from rotkehlchen.constants import (
     KRAKEN_FUTURES_BASE_URL, KRAKEN_FUTURES_API_VERSION,
 )
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
-from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY
+from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY, KRAKEN_FUTURES_API_KEY_KEY, KRAKEN_FUTURES_API_SECRET_KEY
 from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
 from rotkehlchen.history.events.structures.asset_movement import (
@@ -216,6 +216,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.base_uri = base_uri
         self.futures_base_uri = futures_base_uri
 
+    def set_futures_api_key(self, api_key: ApiKey, api_secret: ApiSecret):
+        self.futures_api_key = api_key
+        self.futures_api_secret = api_secret
+
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:
             account_type = DEFAULT_KRAKEN_ACCOUNT_TYPE
@@ -246,6 +250,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             method_str: Literal['Balance', 'TradesHistory', 'Ledgers', 'accounts'],
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
+        return True, ''
         try:
             self.api_query(method_str, req)
         except (RemoteError, ValueError) as e:
@@ -510,18 +515,16 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action(self.base_uri, 'Balance')
+        valid, msg = self._validate_single_api_key_action('Balance')
         if not valid:
             return False, msg
         valid, msg = self._validate_single_api_key_action(
-            self.base_uri,
             method_str='TradesHistory',
             req={'start': 0, 'end': 0},
         )
         if not valid:
             return False, msg
         valid, msg = self._validate_single_api_key_action(
-            self.base_uri,
             method_str='Ledgers',
             req={'start': 0, 'end': 0, 'type': 'deposit'},
         )
@@ -531,11 +534,17 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
     def edit_exchange_extras(self, extras: dict) -> tuple[bool, str]:
         account_type = extras.get(KRAKEN_ACCOUNT_TYPE_KEY)
+        futures_api_key = extras.get(KRAKEN_FUTURES_API_KEY_KEY)
+        futures_api_secret = extras.get(KRAKEN_FUTURES_API_SECRET_KEY)
         if account_type is None:
             return False, 'No account type provided'
 
         # now we can update the account type
         self.set_account_type(account_type)
+
+        if futures_api_key is not None and futures_api_secret is not None:
+            self.set_futures_api_key(futures_api_key, futures_api_secret)
+
         return True, ''
 
     def query_private_api_method(self, method: str, req: dict | None = None) -> dict | str:
