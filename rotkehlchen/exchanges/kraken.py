@@ -193,6 +193,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             kraken_account_type: KrakenAccountType | None = None,
             futures_api_key: ApiKey | None = None,
             futures_api_secret: ApiSecret | None = None,
+            base_uri: str  = KRAKEN_BASE_URL,
+            futures_base_uri: str = KRAKEN_FUTURES_BASE_URL,
     ):
         super().__init__(
             name=name,
@@ -211,8 +213,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.history_events_db = DBHistoryEvents(self.db)
         self.futures_api_key = futures_api_key
         self.futures_api_secret = futures_api_secret
-        self.base_uri = KRAKEN_BASE_URL,
-        self.futures_base_uri = KRAKEN_FUTURES_BASE_URL,
+        self.base_uri = base_uri
+        self.futures_base_uri = futures_base_uri
 
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:
@@ -1138,7 +1140,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             'Authent': signature,
         })
         try:
-            full_url = self.base_uri + urlpath
+            full_url = self.futures_base_uri + urlpath
             log.debug(f'Querying Kraken for {method} with {req} at URL: {full_url}')
             response = self.session.get(
                 full_url,
@@ -1159,7 +1161,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
-        valid, msg = self._validate_single_api_key_action(self.futures_base_uri, 'accounts')
+        valid, msg = self._validate_single_api_key_action('accounts')
         if not valid:
             return False, msg
 

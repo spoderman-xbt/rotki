@@ -23,7 +23,6 @@ from rotkehlchen.exchanges.gemini import Gemini
 from rotkehlchen.exchanges.htx import Htx
 from rotkehlchen.exchanges.iconomi import Iconomi
 from rotkehlchen.exchanges.independentreserve import Independentreserve
-from rotkehlchen.exchanges.krakenfutures import Krakenfutures
 from rotkehlchen.exchanges.kucoin import Kucoin
 from rotkehlchen.exchanges.manager import ExchangeManager
 from rotkehlchen.exchanges.okx import Okx
