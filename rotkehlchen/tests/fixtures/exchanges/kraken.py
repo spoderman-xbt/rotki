@@ -48,7 +48,7 @@ def fixture_demo_kraken_futures(
         secret=kraken_demo_api_secret,
         database=database,
         msg_aggregator=function_scope_messages_aggregator,
-        futures_api_key=kraken_demo_api_key,
-        futures_api_secret=kraken_demo_api_secret,
+        kraken_futures_api_key=kraken_demo_api_key,
+        kraken_futures_api_secret=kraken_demo_api_secret,
         futures_base_uri=kraken_futures_test_base_uri,
     )

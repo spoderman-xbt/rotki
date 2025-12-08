@@ -191,8 +191,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             database: 'DBHandler',
             msg_aggregator: 'MessagesAggregator',
             kraken_account_type: KrakenAccountType | None = None,
-            futures_api_key: ApiKey | None = None,
-            futures_api_secret: ApiSecret | None = None,
+            kraken_futures_api_key: ApiKey | None = None,
+            kraken_futures_api_secret: ApiSecret | None = None,
             base_uri: str  = KRAKEN_BASE_URL,
             futures_base_uri: str = KRAKEN_FUTURES_BASE_URL,
     ):
@@ -211,8 +211,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.call_counter = 0
         self.last_query_ts = 0
         self.history_events_db = DBHistoryEvents(self.db)
-        self.futures_api_key = futures_api_key
-        self.futures_api_secret = futures_api_secret
+        self.futures_api_key = kraken_futures_api_key
+        self.futures_api_secret = kraken_futures_api_secret
         self.base_uri = base_uri
         self.futures_base_uri = futures_base_uri
 
@@ -407,7 +407,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 usd_value=balance.usd_value,
             )
 
-        return dict(assets_balance)
+        return dict(assets_balance), ''
 
     def query_until_finished(
             self,
@@ -601,9 +601,12 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
     @cache_response_timewise()
     def query_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
         returned_balances: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
-        futures_balances = self.query_futures_balances()
+        log.debug(f'querying futures balances for {self.location} with kwargs {kwargs}...')
+        futures_balances, msg = self.query_futures_balances()
         if futures_balances is None:
-            return None, 'Failed to query futures balances'
+            return None, msg
+
+        log.debug(f'done querying futures balances for {self.location} got {futures_balances}...')
 
         for asset, balance in futures_balances.items():
             returned_balances[asset] += Balance(
@@ -611,9 +614,11 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 usd_value=balance.usd_value
             )
 
-        spot_balances = self.query_spot_balances()
+        log.debug(f'done parsing futures balances for {self.location} got {returned_balances}')
+
+        spot_balances, msg = self.query_spot_balances()
         if spot_balances is None:
-            return None, 'Failed to query spot balances'
+            return returned_balances, msg
 
         for asset, balance in spot_balances.items():
             returned_balances[asset] += Balance(
@@ -621,7 +626,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 usd_value=balance.usd_value
             )
 
-        return dict(returned_balances), ''
+        return returned_balances, ''
 
     def query_spot_balances(self):
         raw_balances, msg = self.query_balances_base('Balance')
@@ -1163,18 +1168,20 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         # any unicode strings must be turned to bytes
         hashable = (post_data + req['nonce'] + urlpath_without_prefix).encode()
         message = hashlib.sha256(hashable).digest()
-        signature = self.generate_hmac_b64_signature(
+        signature = self.generate_hmac_b64_signature_for_futures(
+            secret=self.futures_api_secret,
             message=message,
             digest_algorithm=hashlib.sha512,
         )
         self.session.headers.update({
-            'APIKey': self.api_key,
+            'APIKey': self.futures_api_key,
             'Nonce': req['nonce'],
             'Authent': signature,
         })
         try:
             full_url = self.futures_base_uri + urlpath
-            log.debug(f'Querying Kraken for {method} with {req} at URL: {full_url}')
+            log.debug(f'Querying Kraken for {method} with {req} at URL: '
+              f'{full_url} and API key {self.futures_api_key} and API Secrret {self.futures_api_secret} yielding signature {signature}')
             response = self.session.get(
                 full_url,
                 timeout=CachedSettings().get_timeout_tuple(),
@@ -1200,9 +1207,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
         return True, ''
 
-    # ---- General exchanges interface ----
-    @protect_with_lock()
-    @cache_response_timewise()
     def query_futures_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
         raw_balances, msg = self.query_balances_base('accounts')
         log.debug(f'got Kraken Futures raw balances = {raw_balances}')
