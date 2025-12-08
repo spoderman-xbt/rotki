@@ -103,6 +103,8 @@ const apiSecretModel = refWithAsterisk(apiSecret);
 
 const passphrase = useRefPropVModel(modelValue, 'passphrase');
 const krakenAccountType = useRefPropVModel(modelValue, 'krakenAccountType');
+const krakenFuturesApiKey = useRefPropVModel(modelValue, 'krakenFuturesApiKey');
+const krakenFuturesApiSecret = useRefPropVModel(modelValue, 'krakenFuturesApiSecret');
 const binanceMarkets = useRefPropVModel(modelValue, 'binanceMarkets');
 const okxLocation = useRefPropVModel(modelValue, 'okxLocation');
 
@@ -120,11 +122,33 @@ const name = computed<string>({
   },
 });
 
+const krakenFuturesApiKeyComputed = computed<string>({
+  get() {
+    const value = get(krakenFuturesApiKey);
+    return value ?? '';
+  },
+  set(value: string) {
+    set(krakenFuturesApiKey, value || undefined);
+  },
+});
+
+const krakenFuturesApiSecretComputed = computed<string>({
+  get() {
+    const value = get(krakenFuturesApiSecret);
+    return value ?? '';
+  },
+  set(value: string) {
+    set(krakenFuturesApiSecret, value || undefined);
+  },
+});
+
 useFormStateWatcher({
   apiKey,
   apiSecret,
   binanceMarkets,
   krakenAccountType,
+  krakenFuturesApiKey,
+  krakenFuturesApiSecret,
   name,
   okxLocation,
   passphrase,
@@ -170,17 +194,37 @@ const okxLocations = OkxLocation.options.map((item) => {
 
 const sensitiveFieldEditable = logicOr(logicNot(editMode), editKeys);
 
+const hasSpotKeys = computed(() => {
+  return !!(get(apiKey) && get(apiSecret));
+});
+
+const hasFuturesKeys = computed(() => {
+  return !!(get(krakenFuturesApiKey) && get(krakenFuturesApiSecret));
+});
+
 const v$ = useVuelidate({
   apiKey: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(sensitiveFieldEditable),
+      requiredIf(!hasFuturesKeys),
     ),
   },
   apiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
+      requiredIf(!hasFuturesKeys),
+    ),
+  },
+  krakenFuturesApiKey: {
+    required: helpers.withMessage(
+      t('exchange_keys_form.validation.non_empty'),
+      requiredIf(!hasSpotKeys),
+    ),
+  },
+  krakenFuturesApiSecret: {
+    required: helpers.withMessage(
+      t('exchange_keys_form.validation.non_empty'),
+        requiredIf(!hasSpotKeys),
     ),
   },
   binanceMarkets: {
@@ -216,6 +260,8 @@ const v$ = useVuelidate({
 }, {
   apiKey,
   apiSecret,
+  krakenFuturesApiKey,
+  krakenFuturesApiSecret,
   binanceMarkets,
   name: nameProp,
   newName: newNameProp,
@@ -230,6 +276,8 @@ function onExchangeChange(exchange?: string) {
     apiSecret: '',
     binanceMarkets: undefined,
     krakenAccountType: name === 'kraken' ? 'starter' : undefined,
+    krakenFuturesApiKey: name === 'kraken' ? '' : undefined,
+    krakenFuturesApiSecret: name === 'kraken' ? '' : undefined,
     location: name,
     mode: get(modelValue, 'mode'),
     name: suggestedName(name),
@@ -374,6 +422,7 @@ defineExpose({
         />
       </template>
 
+
       <template #apiSecret="{ label, hint, className }">
         <Component
           :is="sensitiveInputComponent"
@@ -392,6 +441,7 @@ defineExpose({
         />
       </template>
 
+
       <template #passphrase="{ label, hint, className }">
         <Component
           :is="sensitiveInputComponent"
@@ -408,7 +458,33 @@ defineExpose({
           :class="className"
         />
       </template>
+
     </ExchangeKeysFormStructure>
+
+    <template v-if="isKraken">
+      <Component
+          :is="sensitiveInputComponent"
+          v-model.trim="krakenFuturesApiKeyComputed"
+          variant="outlined"
+          color="primary"
+          :disabled="editMode && !editKeys"
+          :error-messages="toMessages(v$.krakenFuturesApiKey)"
+          data-cy="kraken-futures-api-key"
+          prepend-icon="lu-key"
+          label="Futures API Key"
+      />
+      <Component
+          :is="sensitiveInputComponent"
+          v-model.trim="krakenFuturesApiSecretComputed"
+          variant="outlined"
+          color="primary"
+          :disabled="editMode && !editKeys"
+          :error-messages="toMessages(v$.krakenFuturesApiSecret)"
+          data-cy="kraken-futures-api-secret"
+          prepend-icon="lu-lock-keyhole"
+          label="Futures API Secret"
+      />
+    </template>
 
     <BinancePairsSelector
       v-if="isBinance"
@@ -418,6 +494,7 @@ defineExpose({
       :error-messages="toMessages(v$.binanceMarkets)"
       @update:selection="modelValue = { ...modelValue, binanceMarkets: $event }"
     />
+
   </div>
 
   <RuiAlert

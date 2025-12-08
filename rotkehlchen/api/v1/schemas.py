@@ -1798,8 +1798,10 @@ class ExchangesResourceEditSchema(BinanceMarketsSchemaMixin):
 
 class ExchangesResourceAddSchema(BinanceMarketsSchemaMixin):
     name = NonEmptyStringField(required=True)
-    api_key = ApiKeyField(required=True)
-    api_secret = ApiSecretField(load_default=None)
+    api_key = ApiKeyField(required=False)  # TODO: Make dynamic
+    api_secret = ApiSecretField(required=False, load_default=None)
+    kraken_futures_api_key = ApiKeyField(required=False, load_default=None)
+    kraken_futures_api_secret = ApiSecretField(required=False, load_default=None)
     passphrase = EmptyAsNoneStringField(load_default=None)
     kraken_account_type = SerializableEnumField(enum_class=KrakenAccountType, load_default=None)
     okx_location = SerializableEnumField(enum_class=OkxLocation, load_default=None)
@@ -1812,7 +1814,7 @@ class ExchangesResourceAddSchema(BinanceMarketsSchemaMixin):
     ) -> None:
         super().validate_schema(data)
         location = data['location']
-        if data['api_secret'] is None and location not in EXCHANGES_WITHOUT_API_SECRET:
+        if data['api_secret'] is None and data['kraken_futures_api_secret'] is None and location not in EXCHANGES_WITHOUT_API_SECRET:
             raise ValidationError(
                 f'{location.name.title()} requires an API secret',
                 field_name='api_secret',

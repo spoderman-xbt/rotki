@@ -209,6 +209,8 @@ class ExchangeManager:
             location: Location,
             api_key: ApiKey,
             api_secret: ApiSecret | None,
+            kraken_futures_api_key: ApiKey,
+            kraken_futures_api_secret: ApiSecret | None,
             database: 'DBHandler',
             passphrase: str | None = None,
             **kwargs: Any,
@@ -224,14 +226,17 @@ class ExchangeManager:
         if self.get_exchange(name=name, location=location) is not None:
             return False, f'{location!s} exchange {name} is already registered'
 
+        if api_key is None and kraken_futures_api_key is None:
+            return False, f'No API key set for {location}'
+
         api_credentials = ExchangeApiCredentials(
             name=name,
             location=location,
-            api_key=api_key,
-            api_secret=api_secret,
+            api_key=api_key if api_key is not None else kraken_futures_api_key,
+            api_secret=api_secret if api_secret is not None else kraken_futures_api_secret,
             passphrase=passphrase,
         )
-        exchange = self.initialize_exchange(
+        exchange: ExchangeInterface = self.initialize_exchange(
             module=self._get_exchange_module(location),
             credentials=api_credentials,
             database=database,

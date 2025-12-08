@@ -2396,6 +2396,7 @@
       "format": "Format",
       "id": "ID",
       "kraken_account": "Select the type of your Kraken account",
+      "kraken_futures_keys": "Futures",
       "passphrase": "Passphrase",
       "private_key": "Private Key",
       "secret": "Secret",

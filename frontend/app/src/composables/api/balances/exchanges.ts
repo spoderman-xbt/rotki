@@ -45,6 +45,7 @@ export function useExchangeApi(): UseExchangeApiReturn {
   };
 
   const callSetupExchange = async ({ mode, ...payload }: ExchangeFormData): Promise<boolean> => {
+    console.log(payload);
     if (mode === 'edit') {
       return api.patch<boolean>(
         '/exchanges',

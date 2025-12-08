@@ -1879,6 +1879,8 @@ class DBHandler:
             api_secret: ApiSecret | None,
             passphrase: str | None = None,
             kraken_account_type: KrakenAccountType | None = None,
+            kraken_futures_api_key: str | None = None,
+            kraken_futures_api_secret: str | None = None,
             binance_selected_trade_pairs: list[str] | None = None,
             okx_location: OkxLocation | None = None,
     ) -> None:

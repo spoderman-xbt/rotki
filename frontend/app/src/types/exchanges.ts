@@ -66,6 +66,8 @@ export interface ExchangePayload {
   readonly apiSecret: string;
   readonly passphrase: string;
   readonly krakenAccountType?: KrakenAccountType;
+  readonly krakenFuturesApiKey?: string;
+  readonly krakenFuturesApiSecret?: string;
   readonly binanceMarkets?: string[];
   readonly okxLocation?: OkxLocation;
 }
