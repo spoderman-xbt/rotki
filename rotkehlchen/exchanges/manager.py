@@ -239,10 +239,12 @@ class ExchangeManager:
         api_credentials = ExchangeApiCredentials(
             name=name,
             location=location,
-            api_key=api_key if api_key is not None else kraken_futures_api_key,
-            api_secret=api_secret if api_secret is not None else kraken_futures_api_secret,
+            api_key=api_key,
+            api_secret=api_secret,
             passphrase=passphrase,
         )
+        kwargs.update({KRAKEN_FUTURES_API_KEY_KEY: kraken_futures_api_key})
+        kwargs.update({KRAKEN_FUTURES_API_SECRET_KEY: kraken_futures_api_secret})
         exchange: ExchangeInterface = self.initialize_exchange(
             module=self._get_exchange_module(location),
             credentials=api_credentials,

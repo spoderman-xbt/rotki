@@ -218,7 +218,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
     def set_futures_api_key(self, api_key: ApiKey, api_secret: ApiSecret):
         self.futures_api_key = api_key
-        self.futures_api_secret = ApiSecret(base64.b64decode(api_secret)) if api_secret is not None else None
+        self.futures_api_secret = ApiSecret(base64.b64decode(api_secret))
 
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:
