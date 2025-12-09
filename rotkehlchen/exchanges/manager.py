@@ -238,9 +238,6 @@ class ExchangeManager:
         if self.get_exchange(name=name, location=location) is not None:
             return False, f'{location!s} exchange {name} is already registered'
 
-        if api_key is None and kraken_futures_api_key is None:
-            return False, f'No API key set for {location}'
-
         api_credentials = ExchangeApiCredentials(
             name=name,
             location=location,

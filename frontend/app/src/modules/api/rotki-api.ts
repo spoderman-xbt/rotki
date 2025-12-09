@@ -221,7 +221,6 @@ export class RotkiApi {
     } = options;
 
     const doFetch = async (): Promise<T> => {
-        console.log('fetching', url, fetchOptions);
       const body = this.transformBody(fetchOptions.body, { skipSnakeCase, filterEmptyProperties });
       const query = this.transformQuery(fetchOptions.query as Record<string, unknown> | undefined, { skipSnakeCase, filterEmptyProperties });
 

@@ -186,7 +186,6 @@ export function useExchanges(): UseExchangesReturn {
       okxLocation: location === 'okx' ? okxLocation : undefined,
     };
 
-    console.log(filteredPayload);
     const success = await callSetupExchange(filteredPayload);
 
     // Only get the essential exchange data to store in memory, excluding the api key and secret

@@ -123,13 +123,10 @@ const name = computed<string>({
   },
 });
 
-function refWithAsteriskOptional(comp: WritableComputedRef<string>, originalRef: WritableComputedRef<string | undefined>): WritableComputedRef<string> {
+function refWithAsteriskOptional(comp: WritableComputedRef<string>): WritableComputedRef<string> {
   return computed({
     get() {
-      const originalValue = get(originalRef);
-      const hasValue = originalValue !== undefined && originalValue !== null && originalValue !== '';
       if (get(editMode) && !get(editFuturesKeys)) {
-        // if (get(editMode) && !get(editFuturesKeys) && hasValue) {
         return asteriskPlaceholder;
       }
       return get(comp);
@@ -167,8 +164,8 @@ const futuresSensitiveInputComponent = computed(() => {
   return RuiTextField;
 });
 
-const krakenFuturesApiKeyModel = refWithAsteriskOptional(krakenFuturesApiKeyComputed, krakenFuturesApiKey);
-const krakenFuturesApiSecretModel = refWithAsteriskOptional(krakenFuturesApiSecretComputed, krakenFuturesApiSecret);
+const krakenFuturesApiKeyModel = refWithAsteriskOptional(krakenFuturesApiKeyComputed);
+const krakenFuturesApiSecretModel = refWithAsteriskOptional(krakenFuturesApiSecretComputed);
 
 useFormStateWatcher({
   apiKey,
@@ -233,24 +230,6 @@ const okxLocations = OkxLocation.options.map((item) => {
 
 const sensitiveFieldEditable = logicOr(logicNot(editMode), editKeys);
 
-const AtLeastOneKeyset = computed(() => {
-      if (!get(isKraken)) return true;
-      const hasSpot = get(apiKey) && get(apiSecret);
-      const hasFutures = get(krakenFuturesApiKey) && get(krakenFuturesApiSecret);
-      return hasSpot || hasFutures;
-});
-
-const hasFuturesKeys = computed(() => {
-  return !!(get(krakenFuturesApiKey) && get(krakenFuturesApiSecret));
-});
-
-const hasSpotKeys = computed(() => {
-  return !!(get(apiKey) && get(apiSecret));
-});
-
-const spotFieldEditable = logicOr(logicNot(editMode), editKeys);
-const futuresFieldEditable = logicOr(logicNot(editMode), editFuturesKeys);
-
 const v$ = useVuelidate({
   apiKey: {
     required: helpers.withMessage(
@@ -261,7 +240,7 @@ const v$ = useVuelidate({
   apiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-        requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
+      requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
     ),
   },
   krakenFuturesApiKey: {
@@ -335,9 +314,6 @@ function onExchangeChange(exchange?: string) {
 onMounted(() => {
   if (get(editMode)) {
     set(newNameProp, get(nameProp));
- // Debug: Check what futures keys we have
-    console.log('Edit mode - krakenFuturesApiKey:', get(krakenFuturesApiKey));
-    console.log('Edit mode - krakenFuturesApiSecret:', get(krakenFuturesApiSecret));
     return;
   }
 
@@ -466,7 +442,6 @@ defineExpose({
         />
       </template>
 
-
       <template #apiSecret="{ label, hint, className }">
         <Component
           :is="sensitiveInputComponent"
@@ -483,9 +458,7 @@ defineExpose({
           :hint="hint"
           :class="className"
         />
-
       </template>
-
 
       <template #passphrase="{ label, hint, className }">
         <Component
@@ -503,9 +476,14 @@ defineExpose({
           :class="className"
         />
       </template>
-
     </ExchangeKeysFormStructure>
 
+    <RuiAlert
+      v-if="isBinance"
+      type="info"
+    >
+      {{ t('exchange_keys_form.binance_markets_required') }}
+    </RuiAlert>
     <template v-if="isKraken">
         <div
           class="flex items-center gap-2 text-subtitle-2 pb-4"
@@ -566,16 +544,7 @@ defineExpose({
       :error-messages="toMessages(v$.binanceMarkets)"
       @update:selection="modelValue = { ...modelValue, binanceMarkets: $event }"
     />
-
   </div>
-
-  <RuiAlert
-    v-if="isBinance"
-    class="mt-4"
-    type="info"
-  >
-    {{ t('exchange_keys_form.binance_markets_required') }}
-  </RuiAlert>
 
   <RuiAlert
     v-if="showKeyWaitingTimeWarning"

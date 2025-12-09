@@ -1877,8 +1877,7 @@ class ExchangesResourceAddSchema(BinanceMarketsSchemaMixin):
     ) -> None:
         super().validate_schema(data)
         location = data['location']
-        if (data['api_secret'] is None and data['kraken_futures_api_secret'] is None
-                and location not in EXCHANGES_WITHOUT_API_SECRET):
+        if data['api_secret'] is None and location not in EXCHANGES_WITHOUT_API_SECRET:
             raise ValidationError(
                 f'{location.name.title()} requires an API secret',
                 field_name='api_secret',

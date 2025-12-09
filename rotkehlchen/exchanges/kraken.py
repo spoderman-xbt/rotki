@@ -199,7 +199,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             kraken_account_type: KrakenAccountType | None = None,
             kraken_futures_api_key: ApiKey | None = None,
             kraken_futures_api_secret: ApiSecret | None = None,
-            base_uri: str = KRAKEN_BASE_URL,
             futures_base_uri: str = KRAKEN_FUTURES_BASE_URL,
     ):
         super().__init__(
@@ -220,7 +219,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.futures_api_key = kraken_futures_api_key
         self.futures_api_secret = ApiSecret(base64.b64decode(kraken_futures_api_secret)) if (
                 kraken_futures_api_secret is not None) else None
-        self.base_uri = base_uri
+        self.base_uri = KRAKEN_BASE_URL
         self.futures_base_uri = futures_base_uri
 
     def set_futures_api_key(self, api_key: ApiKey, api_secret: ApiSecret):
@@ -346,7 +345,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 self.call_counter = max(
                     0,
                     self.call_counter - int(secs_since_last_call / self.reduction_every_secs),
-                    )
+                )
                 # If still at limit, sleep for an amount big enough for smallest tier reduction
                 if self.call_counter + MAX_CALL_COUNTER_INCREASE > self.call_limit:
                     backoff_in_seconds = self.reduction_every_secs * 2

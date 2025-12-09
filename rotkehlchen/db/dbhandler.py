@@ -1904,7 +1904,7 @@ class DBHandler:
             self,
             name: str,
             location: Location,
-            api_key: ApiKey | None,
+            api_key: ApiKey,
             api_secret: ApiSecret | None,
             passphrase: str | None = None,
             kraken_account_type: KrakenAccountType | None = None,
@@ -1917,7 +1917,7 @@ class DBHandler:
             raise InputError(f'Unsupported exchange {location!s}')
 
         with self.user_write() as cursor:
-            cursor.execute(  # TODO: Make sure no overwrite if None
+            cursor.execute(
                 'INSERT INTO user_credentials '
                 '(name, location, api_key, api_secret, passphrase) VALUES (?, ?, ?, ?, ?)',
                 (name, location.serialize_for_db(), api_key, api_secret.decode() if api_secret is not None else None, passphrase),  # noqa: E501
@@ -2177,11 +2177,8 @@ class DBHandler:
                     except DeserializationError as e:
                         log.error(f'Couldnt deserialize kraken account type from DB. {e!s}')
                 elif key == KRAKEN_FUTURES_API_KEY_KEY:
-                    log.debug(f'unlocking user with {KRAKEN_FUTURES_API_KEY_KEY} key {entry[1]}')
                     extras[key] = entry[1]
                 elif key == KRAKEN_FUTURES_API_SECRET_KEY:
-                    log.debug(
-                        f'unlocking user with {KRAKEN_FUTURES_API_SECRET_KEY} key {entry[1]}')
                     extras[key] = entry[1]
                 elif key == OKX_LOCATION_KEY:
                     try:  # type is checked above
