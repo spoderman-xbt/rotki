@@ -69,6 +69,7 @@ class SignatureGeneratorMixin:
     def generate_hmac_b64_signature(
             self,
             message: str | bytes,
+            secret: bytes | bytearray = None,
             digest_algorithm: Any = hashlib.sha256,
             encoding: str = 'utf-8',
     ) -> str:
@@ -86,13 +87,44 @@ class SignatureGeneratorMixin:
         if isinstance(message, str):
             message = message.encode(encoding)
 
+        if secret is None:
+            secret = self.secret
         return base64.b64encode(
             hmac.new(
-                self.secret,
+                secret,
                 message,
                 digest_algorithm,
             ).digest(),
         ).decode('utf-8')
+
+    # def generate_hmac_b64_signature_for_futures(
+    #         self,
+    #         secret: bytes | bytearray,
+    #         message: str | bytes,
+    #         digest_algorithm: Any = hashlib.sha256,
+    #         encoding: str = 'utf-8',
+    # ) -> str:
+    #     """
+    #     Generate HMAC signature and return as base64 string.
+    #
+    #     Args:
+    #         message: The message to sign (string or bytes)
+    #         digest_algorithm: Hash algorithm to use (default: hashlib.sha256)
+    #         encoding: String encoding to use if message is string (default: utf-8)
+    #
+    #     Returns:
+    #         Base64-encoded signature string
+    #     """
+    #     if isinstance(message, str):
+    #         message = message.encode(encoding)
+    #
+    #     return base64.b64encode(
+    #         hmac.new(
+    #             secret,
+    #             message,
+    #             digest_algorithm,
+    #         ).digest(),
+    #     ).decode('utf-8')
 
     def generate_hmac_digest(
             self,

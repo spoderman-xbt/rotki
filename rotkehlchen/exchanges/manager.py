@@ -6,7 +6,13 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Optional
 
 from rotkehlchen.api.websockets.typedefs import HistoryEventsStep
-from rotkehlchen.db.constants import BINANCE_MARKETS_KEY, KRAKEN_ACCOUNT_TYPE_KEY, OKX_LOCATION_KEY
+from rotkehlchen.db.constants import (
+    BINANCE_MARKETS_KEY,
+    KRAKEN_ACCOUNT_TYPE_KEY,
+    KRAKEN_FUTURES_API_KEY_KEY,
+    KRAKEN_FUTURES_API_SECRET_KEY,
+    OKX_LOCATION_KEY,
+)
 from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.errors.misc import InputError
 from rotkehlchen.exchanges.binance import BINANCE_BASE_URL, BINANCEUS_BASE_URL
@@ -83,6 +89,8 @@ class ExchangeManager:
             api_secret: ApiSecret | None,
             passphrase: str | None,
             kraken_account_type: Optional['KrakenAccountType'],
+            kraken_futures_api_key: str | None,
+            kraken_futures_api_secret: str | None,
             binance_selected_trade_pairs: list[str] | None,
             okx_location: Optional['OkxLocation'],
     ) -> tuple[bool, str]:
@@ -115,6 +123,8 @@ class ExchangeManager:
         if isinstance(exchangeobj, ExchangeWithExtras):
             success, msg = exchangeobj.edit_exchange_extras({
                 KRAKEN_ACCOUNT_TYPE_KEY: kraken_account_type,
+                KRAKEN_FUTURES_API_KEY_KEY: kraken_futures_api_key,
+                KRAKEN_FUTURES_API_SECRET_KEY: kraken_futures_api_secret,
                 BINANCE_MARKETS_KEY: binance_selected_trade_pairs,
                 OKX_LOCATION_KEY: okx_location,
             })
@@ -133,6 +143,8 @@ class ExchangeManager:
                     api_secret=api_secret,
                     passphrase=passphrase,
                     kraken_account_type=kraken_account_type,
+                    kraken_futures_api_key=kraken_futures_api_key,
+                    kraken_futures_api_secret=kraken_futures_api_secret,
                     binance_selected_trade_pairs=binance_selected_trade_pairs,
                     okx_location=okx_location,
                 )
@@ -207,8 +219,10 @@ class ExchangeManager:
             self,
             name: str,
             location: Location,
-            api_key: ApiKey,
+            api_key: ApiKey | None,
             api_secret: ApiSecret | None,
+            kraken_futures_api_key: ApiKey,
+            kraken_futures_api_secret: ApiSecret | None,
             database: 'DBHandler',
             passphrase: str | None = None,
             **kwargs: Any,
@@ -224,6 +238,9 @@ class ExchangeManager:
         if self.get_exchange(name=name, location=location) is not None:
             return False, f'{location!s} exchange {name} is already registered'
 
+        if api_key is None and kraken_futures_api_key is None:
+            return False, f'No API key set for {location}'
+
         api_credentials = ExchangeApiCredentials(
             name=name,
             location=location,
@@ -231,7 +248,9 @@ class ExchangeManager:
             api_secret=api_secret,
             passphrase=passphrase,
         )
-        exchange = self.initialize_exchange(
+        kwargs.update({KRAKEN_FUTURES_API_KEY_KEY: kraken_futures_api_key})
+        kwargs.update({KRAKEN_FUTURES_API_SECRET_KEY: kraken_futures_api_secret})
+        exchange: ExchangeInterface = self.initialize_exchange(
             module=self._get_exchange_module(location),
             credentials=api_credentials,
             database=database,
@@ -273,6 +292,7 @@ class ExchangeManager:
         elif credentials.location == Location.BINANCEUS:
             kwargs['uri'] = BINANCEUS_BASE_URL
 
+        log.debug(f'Exchange extras = {kwargs.items()}')
         params = {
             'name': credentials.name,
             'api_key': credentials.api_key,
@@ -281,6 +301,7 @@ class ExchangeManager:
             # remove all empty kwargs
             **{k: v for k, v in kwargs.items() if v is not None},
         }
+        log.debug(f'Exchange extras unpacked into params = {params}')
         if credentials.location not in EXCHANGES_WITHOUT_API_SECRET:
             params['secret'] = credentials.api_secret
 

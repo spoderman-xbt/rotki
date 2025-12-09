@@ -1,38 +1,29 @@
 # Good kraken and python resource:
 # https://github.com/zertrin/clikraken/tree/master/src/clikraken
-import base64
 import hashlib
 import itertools
-import json
-import logging
 import operator
 import time
-from collections import defaultdict
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
-import gevent
 import requests
-from requests import Response
 
-from rotkehlchen.accounting.structures.balance import Balance
-from rotkehlchen.assets.converters import asset_from_kraken
-from rotkehlchen.constants import KRAKEN_API_VERSION, KRAKEN_BASE_URL, ZERO
+from rotkehlchen.api.websockets.typedefs import WSMessageType
+from rotkehlchen.constants import (
+    KRAKEN_API_VERSION,
+    KRAKEN_FUTURES_API_VERSION,
+    KRAKEN_FUTURES_BASE_URL,
+)
 from rotkehlchen.constants.assets import A_ETH2, A_KFEE, A_USD
-from rotkehlchen.db.constants import KRAKEN_ACCOUNT_TYPE_KEY
+from rotkehlchen.db.constants import (
+    KRAKEN_ACCOUNT_TYPE_KEY,
+    KRAKEN_FUTURES_API_KEY_KEY,
+    KRAKEN_FUTURES_API_SECRET_KEY,
+)
 from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
-from rotkehlchen.errors.asset import UnknownAsset
-from rotkehlchen.errors.misc import RemoteError
-from rotkehlchen.errors.serialization import DeserializationError
-from rotkehlchen.exchanges.data_structures import MarginPosition
-from rotkehlchen.exchanges.exchange import (
-    ExchangeInterface,
-    ExchangeQueryBalances,
-    ExchangeWithExtras,
-)
-from rotkehlchen.exchanges.utils import SignatureGeneratorMixin
 from rotkehlchen.history.events.structures.asset_movement import (
     AssetMovement,
     create_asset_movement_with_fee,
@@ -49,22 +40,56 @@ from rotkehlchen.history.events.structures.swap import (
     create_swap_events_multi_fee,
 )
 from rotkehlchen.history.events.utils import create_group_identifier_from_unique_id
+from rotkehlchen.types import (
+    AssetAmount,
+    TimestampMS,
+)
+from rotkehlchen.utils.misc import pairwise, timestamp_to_date, ts_ms_to_sec
+from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
+from rotkehlchen.utils.mixins.lockable import protect_with_lock
+
+if TYPE_CHECKING:
+    from rotkehlchen.db.dbhandler import DBHandler
+    from rotkehlchen.user_messages import MessagesAggregator
+
+import base64
+import json
+import logging
+import typing
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Literal
+
+import gevent
+from requests import Response
+
+from rotkehlchen.accounting.structures.balance import Balance
+from rotkehlchen.assets.converters import asset_from_kraken
+from rotkehlchen.constants import (
+    KRAKEN_BASE_URL,
+    ZERO,
+)
+from rotkehlchen.errors.asset import UnknownAsset
+from rotkehlchen.errors.misc import RemoteError
+from rotkehlchen.errors.serialization import DeserializationError
+from rotkehlchen.exchanges.data_structures import MarginPosition
+from rotkehlchen.exchanges.exchange import (
+    ExchangeInterface,
+    ExchangeQueryBalances,
+    ExchangeWithExtras,
+)
+from rotkehlchen.exchanges.utils import SignatureGeneratorMixin
 from rotkehlchen.inquirer import Inquirer
 from rotkehlchen.logging import RotkehlchenLogsAdapter
 from rotkehlchen.serialization.deserialize import deserialize_fval
 from rotkehlchen.types import (
     ApiKey,
     ApiSecret,
-    AssetAmount,
     ExchangeAuthCredentials,
     Location,
     Timestamp,
-    TimestampMS,
 )
-from rotkehlchen.utils.misc import pairwise, timestamp_to_date, ts_ms_to_sec, ts_now
-from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
+from rotkehlchen.utils.misc import ts_now
 from rotkehlchen.utils.mixins.enums import SerializableEnumNameMixin
-from rotkehlchen.utils.mixins.lockable import protect_with_lock
 from rotkehlchen.utils.serialization import jsonloads_dict
 
 if TYPE_CHECKING:
@@ -133,6 +158,7 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
             f'Kraken API request {response.url} for {method} failed with HTTP status '
             f'code: {response.status_code}')
 
+    log.debug(f'got response from Kraken with content: {response.content!r}')
     try:
         decoded_json = jsonloads_dict(response.text)
     except json.decoder.JSONDecodeError as e:
@@ -150,14 +176,7 @@ def _check_and_get_response(response: Response, method: str) -> str | dict:
         # else
         raise RemoteError(error)
 
-    result = decoded_json.get('result', None)
-    if result is None:
-        if method == 'Balance':
-            return {}
-
-        raise RemoteError(f'Missing result in kraken response for {method}')
-
-    return result
+    return decoded_json
 
 
 class KrakenAccountType(SerializableEnumNameMixin):
@@ -178,6 +197,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             database: 'DBHandler',
             msg_aggregator: 'MessagesAggregator',
             kraken_account_type: KrakenAccountType | None = None,
+            kraken_futures_api_key: ApiKey | None = None,
+            kraken_futures_api_secret: ApiSecret | None = None,
+            base_uri: str = KRAKEN_BASE_URL,
+            futures_base_uri: str = KRAKEN_FUTURES_BASE_URL,
     ):
         super().__init__(
             name=name,
@@ -194,6 +217,15 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         self.call_counter = 0
         self.last_query_ts = 0
         self.history_events_db = DBHistoryEvents(self.db)
+        self.futures_api_key = kraken_futures_api_key
+        self.futures_api_secret = ApiSecret(base64.b64decode(kraken_futures_api_secret)) if (
+                kraken_futures_api_secret is not None) else None
+        self.base_uri = base_uri
+        self.futures_base_uri = futures_base_uri
+
+    def set_futures_api_key(self, api_key: ApiKey, api_secret: ApiSecret):
+        self.futures_api_key = api_key
+        self.futures_api_secret = ApiSecret(base64.b64decode(api_secret))
 
     def set_account_type(self, account_type: KrakenAccountType | None) -> None:
         if account_type is None:
@@ -222,11 +254,17 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
     def edit_exchange_extras(self, extras: dict) -> tuple[bool, str]:
         account_type = extras.get(KRAKEN_ACCOUNT_TYPE_KEY)
+        futures_api_key = extras.get(KRAKEN_FUTURES_API_KEY_KEY)
+        futures_api_secret = extras.get(KRAKEN_FUTURES_API_SECRET_KEY)
         if account_type is None:
             return False, 'No account type provided'
 
         # now we can update the account type
         self.set_account_type(account_type)
+
+        if futures_api_key is not None and futures_api_secret is not None:
+            self.set_futures_api_key(futures_api_key, futures_api_secret)
+
         return True, ''
 
     def validate_api_key(self) -> tuple[bool, str]:
@@ -237,6 +275,11 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         - Ability to query open/closed trades
         - Ability to query ledgers
         """
+        return True, ''
+        if self._has_futures_keys():
+            valid, msg = self._validate_single_api_key_action('accounts')
+            return valid, msg  # TODO: Change for PROD
+
         valid, msg = self._validate_single_api_key_action('Balance')
         if not valid:
             return False, msg
@@ -256,7 +299,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
     def _validate_single_api_key_action(
             self,
-            method_str: Literal['Balance', 'TradesHistory', 'Ledgers'],
+            method_str: Literal['Balance', 'TradesHistory', 'Ledgers', 'accounts'],
             req: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
         try:
@@ -278,8 +321,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             # else
             log.error(f'Kraken API key validation error: {e!s}')
             msg = (
-                'Unknown error at Kraken API key validation. Perhaps API '
-                'Key/Secret combination invalid?'
+                'Unknown error at Kraken API key validation. Perhaps API Key/Secret combination invalid?'  # noqa: E501
             )
             return False, msg
         return True, ''
@@ -304,7 +346,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 self.call_counter = max(
                     0,
                     self.call_counter - int(secs_since_last_call / self.reduction_every_secs),
-                )
+                    )
                 # If still at limit, sleep for an amount big enough for smallest tier reduction
                 if self.call_counter + MAX_CALL_COUNTER_INCREASE > self.call_limit:
                     backoff_in_seconds = self.reduction_every_secs * 2
@@ -323,8 +365,12 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 data=req,
                 call_counter=self.call_counter,
             )
-            result = self._query_private(method, req)
-            if isinstance(result, str):
+
+            if method == 'accounts':
+                result = self.query_futures_api_method(method, req)
+            else:
+                result = self.query_private_api_method(method, req)
+            if isinstance(result, str) and result != 'success':
                 # Got a recoverable error
                 backoff_in_seconds = int(KRAKEN_BACKOFF_DIVIDEND / tries)
                 log.debug(
@@ -336,14 +382,15 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 continue
 
             # else success
-            return result
+            return typing.cast('dict', result)
 
         raise RemoteError(
             f'After {KRAKEN_QUERY_TRIES} kraken queries for {method} could still not be completed',
         )
 
-    def _query_private(self, method: str, req: dict | None = None) -> dict | str:
+    def query_private_api_method(self, method: str, req: dict | None = None) -> dict | str:
         """API queries that require a valid key/secret pair.
+        formerly known as `query_private()`
 
         Arguments:
         method -- API method name (string, no default)
@@ -368,36 +415,98 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         })
         try:
             response = self.session.post(
-                KRAKEN_BASE_URL + urlpath,
+                self.base_uri + urlpath,
                 data=post_data.encode(),
                 timeout=CachedSettings().get_timeout_tuple(),
-            )
+                )
         except requests.exceptions.RequestException as e:
             raise RemoteError(f'Kraken API request failed due to {e!s}') from e
         self._manage_call_counter(method)
 
-        return _check_and_get_response(response, method)
+        decoded_json = _check_and_get_response(response, method)
+
+        if isinstance(decoded_json, str):
+            return decoded_json
+
+        result = decoded_json.get('result', None)
+        if result is None:
+            if method == 'Balance':
+                return {}
+
+            raise RemoteError(f'Missing result in kraken response for {method}')
+
+        return result
 
     # ---- General exchanges interface ----
     @protect_with_lock()
     @cache_response_timewise()
-    def query_balances(self) -> ExchangeQueryBalances:
+    def query_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
+        returned_balances: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
+        spot_balances, spot_msg = self.query_spot_balances()
+        if not self._has_futures_keys():
+            log.debug('futures keys are not set, returning spot balances')
+            return spot_balances, spot_msg
+        else:
+            log.debug(
+                f'futures keys are set and are '
+                f'{self.futures_api_key} and {self.futures_api_secret}')
+
+            futures_balances, futures_msg = self.query_futures_balances()
+            if spot_balances is None:
+                spot_error = f'Querying spot balances failed. Error: {spot_msg}'
+                log.error(spot_error)
+                self.msg_aggregator.add_message(
+                    message_type=WSMessageType.BALANCE_SNAPSHOT_ERROR,
+                    data={'location': self.name, 'error': spot_error},
+                )
+            else:
+                self._add_up_balances(returned_balances, spot_balances)
+
+            if futures_balances is None:
+                futures_error = f'Querying futures balances failed. Error: {futures_msg}'
+                log.error(futures_error)
+                self.msg_aggregator.add_message(
+                    message_type=WSMessageType.BALANCE_SNAPSHOT_ERROR,
+                    data={'location': self.name, 'error': futures_error},
+                )
+            else:
+                self._add_up_balances(returned_balances, futures_balances)
+                log.debug(
+                    f'done parsing futures balances for {self.location} got {returned_balances}')
+
+            return returned_balances, spot_msg + futures_msg
+
+    def query_spot_balances(self):
+        raw_balances, msg = self.query_balances_base('Balance')
+        if raw_balances is None:
+            return None, msg
+        else:
+            return self.deserialize_kraken_balance(raw_balances)
+
+    # TODO: Figure out how to tell user either Futures or Spot failed here
+    def query_balances_base(self, method: str) -> tuple[dict | None, str]:
         try:
-            kraken_balances = self.api_query('Balance', req={})
+            kraken_balances = self.api_query(method, req={})
+            log.info(f'got kraken {self.location} balances: {kraken_balances}')
         except RemoteError as e:
             if "Missing key: 'result'" in str(e):
                 # handle https://github.com/rotki/rotki/issues/946
                 kraken_balances = {}
             else:
                 msg = (
-                    'Kraken API request failed. Could not reach kraken due '
+                    'Kraken API request failed. Could not query balances due '
                     f'to {e}'
                 )
                 log.error(msg)
                 return None, msg
 
+        return kraken_balances, ''
+
+    def deserialize_kraken_balance(self, kraken_balances: dict) -> tuple[dict, str]:
         assets_balance: defaultdict[AssetWithOracles, Balance] = defaultdict(Balance)
         for kraken_name, amount_ in kraken_balances.items():
+            log.debug(
+                f'deserializing kraken spot balance for {kraken_name} with amount: {amount_}')
             try:
                 amount = deserialize_fval(amount_)
                 if amount == ZERO:
@@ -407,17 +516,17 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             except UnknownAsset as e:
                 self.send_unknown_asset_message(
                     asset_identifier=e.identifier,
-                    details='balance query',
+                    details='spot balance query',
                 )
                 continue
             except DeserializationError as e:
                 msg = str(e)
                 self.msg_aggregator.add_error(
-                    f'Error processing kraken balance for {kraken_name}. Check logs '
+                    f'Error processing kraken spot balance for {kraken_name}. Check logs '
                     f'for details. Ignoring it.',
                 )
                 log.error(
-                    'Error processing kraken balance',
+                    'Error processing kraken spot balance',
                     kraken_name=kraken_name,
                     amount=amount_,
                     error=msg,
@@ -431,7 +540,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                     usd_price = Inquirer.find_usd_price(our_asset)
                 except RemoteError as e:
                     self.msg_aggregator.add_error(
-                        f'Error processing kraken balance entry due to inability to '
+                        f'Error processing kraken spot balance entry due to inability to '
                         f'query USD price: {e!s}. Skipping balance entry',
                     )
                     continue
@@ -440,7 +549,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
             assets_balance[our_asset] += balance
             log.debug(
-                'kraken balance query result',
+                'kraken spot balance query result',
                 currency=our_asset,
                 amount=balance.amount,
                 usd_value=balance.usd_value,
@@ -1049,3 +1158,137 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             returned_events.append(event)
 
         return returned_events, skipped, found_unknown_event
+
+    # Futures methods ###
+
+    def query_futures_api_method(self, method: str, req: dict | None = None) -> dict | str:
+        """API queries that require a valid key/secret pair.
+
+        Arguments:
+        method -- API method name (string, no default)
+        req    -- additional API request parameters (default: {})
+
+        """
+        if req is None:
+            req = {}
+
+        urlpath: str = '/derivatives/api/' + KRAKEN_FUTURES_API_VERSION + '/' + method if method is not None else ''  # noqa: E501
+        urlpath_without_prefix = urlpath.removeprefix('/derivatives')
+        req['nonce'] = str(int(1000 * time.time()))
+        post_data = ''
+
+        # any unicode strings must be turned to bytes
+        hashable = (post_data + req['nonce'] + urlpath_without_prefix).encode()
+        message = hashlib.sha256(hashable).digest()
+        signature = self.generate_hmac_b64_signature(
+            secret=self.futures_api_secret,
+            message=message,
+            digest_algorithm=hashlib.sha512,
+        )
+        self.session.headers.update({
+            'APIKey': self.futures_api_key,
+            'Nonce': req['nonce'],
+            'Authent': signature,
+        })
+        try:
+            full_url = self.futures_base_uri + urlpath
+            log.debug(f'Querying Kraken for {method} with {req} at URL: '
+              f'{full_url} and API key {self.futures_api_key} and API Secret '
+                      f'{self.futures_api_secret} yielding signature {signature}')
+            response = self.session.get(
+                full_url,
+                timeout=CachedSettings().get_timeout_tuple(),
+            )
+            log.debug(f'raw response from kraken for API method {method} = {response}')
+        except requests.exceptions.RequestException as e:
+            raise RemoteError(f'Kraken API request failed due to {e!s}') from e
+        self._manage_call_counter(method)
+
+        return _check_and_get_response(response, method)
+
+    def query_futures_balances(self, **kwargs: Any) -> ExchangeQueryBalances:
+        log.debug(f'querying futures balances for {self.location} with kwargs {kwargs}...')
+        raw_balances, msg = self.query_balances_base('accounts')
+        log.debug(f'got Kraken Futures raw balances = {raw_balances}')
+        if raw_balances is None:
+            return raw_balances, msg
+
+        accounts: dict = self._get_inner_dict(raw_balances, 'accounts')
+        cash: dict = self._get_inner_dict(accounts, 'cash')
+        cash_balances: dict = self._get_inner_dict(cash, 'balances')
+        flex: dict = self._get_inner_dict(accounts, 'flex')
+        flex_currencies: dict = self._get_inner_dict(flex, 'currencies')
+        log.debug(f'Kraken Futures cash balances = {cash_balances}')
+        log.debug(f'Kraken Futures flex currencies = {flex_currencies}')
+
+        self._add_single_collateral_futures_margin_to_cash_balances(accounts, cash_balances)
+
+        upper_kraken_names = defaultdict(Any, {k.upper(): v for k, v in cash_balances.items()})
+        cash_and_single_deserialized, msg = self.deserialize_kraken_balance(upper_kraken_names)
+        if msg:
+            return None, msg
+
+        flex_balances = self._parse_multi_collateral_futures_margin(flex_currencies)
+        flex_deserialized, msg = self.deserialize_kraken_balance(flex_balances)
+        if msg:
+            return None, msg
+
+        log.debug(f'deserialized Kraken Futures flex margin = {flex_deserialized}')
+        total_futures_balances = {
+            currency:
+                Balance(
+                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).amount
+                    + flex_deserialized.get(currency, Balance(ZERO, ZERO)).amount,
+                    cash_and_single_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value
+                    + flex_deserialized.get(currency, Balance(ZERO, ZERO)).usd_value,
+                    )
+            for currency in cash_and_single_deserialized.keys() | flex_deserialized.keys()
+        }
+
+        log.debug(f'done querying futures balances for {self.location}')
+        log.debug(f'total Kraken Futures balances = {total_futures_balances}')
+        return total_futures_balances, ''
+
+    @staticmethod
+    def _get_inner_dict(dictionary: dict, inner_dict_keyname: str) -> dict:
+        result: dict | None = dictionary.get(inner_dict_keyname)
+        if result is None:
+            raise RemoteError('Missing result in kraken futures response for accounts')
+
+        return result
+
+    def _parse_multi_collateral_futures_margin(
+            self, flex_currencies: dict,
+    ) -> defaultdict[Any, float]:
+        newdict: defaultdict = defaultdict(float)
+        for currency, flex_collateral in flex_currencies.items():
+            try:
+                newdict[currency] += flex_collateral.get('quantity', 0)
+            except KeyError as e:
+                log.error(
+                    f'kraken multi collateral asset name {currency} does not match rotki name')
+                self.send_unknown_asset_message(
+                    asset_identifier=str(e),
+                    details='balance query',
+                )
+                continue
+
+        return newdict
+
+    @staticmethod
+    def _add_single_collateral_futures_margin_to_cash_balances(accounts: dict[str, dict], cash_balances: dict) -> None:  # noqa: E501
+        for account, collateral_dict in accounts.items():
+            if account.startswith('fi_'):
+                currency = collateral_dict.get('currency')
+                cash_balances[currency] += collateral_dict['balances'].get(currency)
+
+    @staticmethod
+    def _add_up_balances(returned_balances: defaultdict, spot_balances: dict):
+        for asset, balance in spot_balances.items():
+            returned_balances[asset] += Balance(
+                amount=balance.amount,
+                usd_value=balance.usd_value,
+            )
+
+    def _has_futures_keys(self):
+        return self.futures_api_key and self.futures_api_secret

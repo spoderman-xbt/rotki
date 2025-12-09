@@ -23,6 +23,7 @@ const stateUpdated = defineModel<boolean>('stateUpdated', { required: true });
 const errorMessages = defineModel<ValidationErrors>('errorMessages', { default: () => ({}) });
 
 const editKeys = ref<boolean>(false);
+const editFuturesKeys = ref<boolean>(false);
 
 const locationStore = useLocationStore();
 const { exchangesWithoutApiSecret, exchangesWithPassphrase } = storeToRefs(locationStore);
@@ -103,6 +104,8 @@ const apiSecretModel = refWithAsterisk(apiSecret);
 
 const passphrase = useRefPropVModel(modelValue, 'passphrase');
 const krakenAccountType = useRefPropVModel(modelValue, 'krakenAccountType');
+const krakenFuturesApiKey = useRefPropVModel(modelValue, 'krakenFuturesApiKey');
+const krakenFuturesApiSecret = useRefPropVModel(modelValue, 'krakenFuturesApiSecret');
 const binanceMarkets = useRefPropVModel(modelValue, 'binanceMarkets');
 const okxLocation = useRefPropVModel(modelValue, 'okxLocation');
 
@@ -120,11 +123,60 @@ const name = computed<string>({
   },
 });
 
+function refWithAsteriskOptional(comp: WritableComputedRef<string>, originalRef: WritableComputedRef<string | undefined>): WritableComputedRef<string> {
+  return computed({
+    get() {
+      const originalValue = get(originalRef);
+      const hasValue = originalValue !== undefined && originalValue !== null && originalValue !== '';
+      if (get(editMode) && !get(editFuturesKeys)) {
+        // if (get(editMode) && !get(editFuturesKeys) && hasValue) {
+        return asteriskPlaceholder;
+      }
+      return get(comp);
+    },
+    set(value: string) {
+      set(comp, value);
+    },
+  });
+}
+
+const krakenFuturesApiKeyComputed = computed<string>({
+  get() {
+    const value = get(krakenFuturesApiKey);
+    return value ?? '';
+  },
+  set(value: string) {
+    set(krakenFuturesApiKey, value || undefined);
+  },
+});
+
+const krakenFuturesApiSecretComputed = computed<string>({
+  get() {
+    const value = get(krakenFuturesApiSecret);
+    return value ?? '';
+  },
+  set(value: string) {
+    set(krakenFuturesApiSecret, value || undefined);
+  },
+});
+
+const futuresSensitiveInputComponent = computed(() => {
+  if (!get(editMode) || get(editFuturesKeys)) {
+    return RuiRevealableTextField;
+  }
+  return RuiTextField;
+});
+
+const krakenFuturesApiKeyModel = refWithAsteriskOptional(krakenFuturesApiKeyComputed, krakenFuturesApiKey);
+const krakenFuturesApiSecretModel = refWithAsteriskOptional(krakenFuturesApiSecretComputed, krakenFuturesApiSecret);
+
 useFormStateWatcher({
   apiKey,
   apiSecret,
   binanceMarkets,
   krakenAccountType,
+  krakenFuturesApiKey,
+  krakenFuturesApiSecret,
   name,
   okxLocation,
   passphrase,
@@ -144,6 +196,17 @@ function toggleEdit() {
       ...get(modelValue),
       apiKey: '',
       apiSecret: '',
+    });
+  }
+}
+
+function toggleFuturesEdit() {
+  set(editFuturesKeys, !get(editFuturesKeys));
+  if (!get(editFuturesKeys)) {
+    set(modelValue, {
+      ...get(modelValue),
+      krakenFuturesApiKey: '',
+      krakenFuturesApiSecret: '',
     });
   }
 }
@@ -170,6 +233,24 @@ const okxLocations = OkxLocation.options.map((item) => {
 
 const sensitiveFieldEditable = logicOr(logicNot(editMode), editKeys);
 
+const AtLeastOneKeyset = computed(() => {
+      if (!get(isKraken)) return true;
+      const hasSpot = get(apiKey) && get(apiSecret);
+      const hasFutures = get(krakenFuturesApiKey) && get(krakenFuturesApiSecret);
+      return hasSpot || hasFutures;
+});
+
+const hasFuturesKeys = computed(() => {
+  return !!(get(krakenFuturesApiKey) && get(krakenFuturesApiSecret));
+});
+
+const hasSpotKeys = computed(() => {
+  return !!(get(apiKey) && get(apiSecret));
+});
+
+const spotFieldEditable = logicOr(logicNot(editMode), editKeys);
+const futuresFieldEditable = logicOr(logicNot(editMode), editFuturesKeys);
+
 const v$ = useVuelidate({
   apiKey: {
     required: helpers.withMessage(
@@ -180,8 +261,12 @@ const v$ = useVuelidate({
   apiSecret: {
     required: helpers.withMessage(
       t('exchange_keys_form.validation.non_empty'),
-      requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
+        requiredIf(logicAnd(sensitiveFieldEditable, requiresApiSecret)),
     ),
+  },
+  krakenFuturesApiKey: {
+  },
+  krakenFuturesApiSecret: {
   },
   binanceMarkets: {
     required: helpers.withMessage(
@@ -216,6 +301,8 @@ const v$ = useVuelidate({
 }, {
   apiKey,
   apiSecret,
+  krakenFuturesApiKey,
+  krakenFuturesApiSecret,
   binanceMarkets,
   name: nameProp,
   newName: newNameProp,
@@ -230,6 +317,8 @@ function onExchangeChange(exchange?: string) {
     apiSecret: '',
     binanceMarkets: undefined,
     krakenAccountType: name === 'kraken' ? 'starter' : undefined,
+    krakenFuturesApiKey: name === 'kraken' ? '' : undefined,
+    krakenFuturesApiSecret: name === 'kraken' ? '' : undefined,
     location: name,
     mode: get(modelValue, 'mode'),
     name: suggestedName(name),
@@ -246,6 +335,9 @@ function onExchangeChange(exchange?: string) {
 onMounted(() => {
   if (get(editMode)) {
     set(newNameProp, get(nameProp));
+ // Debug: Check what futures keys we have
+    console.log('Edit mode - krakenFuturesApiKey:', get(krakenFuturesApiKey));
+    console.log('Edit mode - krakenFuturesApiSecret:', get(krakenFuturesApiSecret));
     return;
   }
 
@@ -374,6 +466,7 @@ defineExpose({
         />
       </template>
 
+
       <template #apiSecret="{ label, hint, className }">
         <Component
           :is="sensitiveInputComponent"
@@ -390,7 +483,9 @@ defineExpose({
           :hint="hint"
           :class="className"
         />
+
       </template>
+
 
       <template #passphrase="{ label, hint, className }">
         <Component
@@ -408,14 +503,60 @@ defineExpose({
           :class="className"
         />
       </template>
+
     </ExchangeKeysFormStructure>
 
-    <RuiAlert
-      v-if="isBinance"
-      type="info"
-    >
-      {{ t('exchange_keys_form.binance_markets_required') }}
-    </RuiAlert>
+    <template v-if="isKraken">
+        <div
+          class="flex items-center gap-2 text-subtitle-2 pb-4"
+        >
+          {{ t('exchange_settings.inputs.kraken_futures_keys') }}
+          <RuiTooltip
+            v-if="editMode"
+            :popper="{ placement: 'top' }"
+            :open-delay="400"
+          >
+            <template #activator>
+              <RuiButton
+                variant="text"
+                class="!p-2"
+                icon
+                @click="toggleFuturesEdit()"
+              >
+                <RuiIcon
+                  size="20"
+                  :name="!editFuturesKeys ? 'lu-pencil' : 'lu-x'"
+                />
+              </RuiButton>
+            </template>
+            {{
+              !editFuturesKeys ? t('exchange_keys_form.edit.activate_tooltip') : t('exchange_keys_form.edit.deactivate_tooltip')
+            }}
+          </RuiTooltip>
+        </div>
+      <Component
+          :is="futuresSensitiveInputComponent"
+          v-model.trim="krakenFuturesApiKeyModel"
+          variant="outlined"
+          color="primary"
+          :disabled="editMode && !editFuturesKeys"
+          :error-messages="toMessages(v$.krakenFuturesApiKey)"
+          data-cy="kraken-futures-api-key"
+          prepend-icon="lu-key"
+          label="Futures API Key"
+      />
+      <Component
+          :is="futuresSensitiveInputComponent"
+          v-model.trim="krakenFuturesApiSecretModel"
+          variant="outlined"
+          color="primary"
+          :disabled="editMode && !editFuturesKeys"
+          :error-messages="toMessages(v$.krakenFuturesApiSecret)"
+          data-cy="kraken-futures-api-secret"
+          prepend-icon="lu-lock-keyhole"
+          label="Futures API Secret"
+      />
+    </template>
 
     <BinancePairsSelector
       v-if="isBinance"
@@ -425,7 +566,16 @@ defineExpose({
       :error-messages="toMessages(v$.binanceMarkets)"
       @update:selection="modelValue = { ...modelValue, binanceMarkets: $event }"
     />
+
   </div>
+
+  <RuiAlert
+    v-if="isBinance"
+    class="mt-4"
+    type="info"
+  >
+    {{ t('exchange_keys_form.binance_markets_required') }}
+  </RuiAlert>
 
   <RuiAlert
     v-if="showKeyWaitingTimeWarning"
