@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from solana.rpc.api import Client
+from solders.solders import Pubkey
 
 from rotkehlchen.assets.asset import Asset
 from rotkehlchen.assets.utils import get_or_create_solana_token, get_solana_token
@@ -71,6 +72,17 @@ def test_solana_token_balances(
     assert balances[Asset('solana/nft:ByqVeGqR8VzvJG67E92rijxvuCzkLrbqotx2kPPo6eot')] == ONE
     assert balances[Asset('solana/nft:Cg4noWpzmDHhPZZXDwmCLJns43PJpLmd6E8aYL1pRcRJ')] == ONE
 
+
+@pytest.mark.parametrize('solana_accounts', [['HYvFHTHcXQKqVTWpaV97Z5WA8TZLn4Mceo3BVF59hMLv']])
+def test_solana_stake_info(
+        solana_manager: 'SolanaManager',
+        solana_accounts: list['SolanaAddress'],
+) -> None:
+    info = solana_manager.get_raw_stake_accounts_info(owner=solana_accounts[0])
+    print(info)
+    stake_accounts = info.value
+    this_stake_account: Pubkey = stake_accounts[0].pubkey
+    assert this_stake_account == Pubkey.from_string('J4XaL61AMPxgwRArzNREHXNb1UifFFvTs6tcizPxLAZQ')
 
 @pytest.mark.vcr
 def test_solana_query_token_metadata(

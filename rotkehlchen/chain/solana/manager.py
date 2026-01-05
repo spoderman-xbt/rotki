@@ -3,7 +3,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-from solana.rpc.types import TokenAccountOpts
+from solana.rpc.types import TokenAccountOpts, MemcmpOpts
 from solders.pubkey import Pubkey
 from spl.token.constants import TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID
 
@@ -32,7 +32,8 @@ from .node_inquirer import SolanaInquirer
 from .transactions import SolanaTransactions
 
 if TYPE_CHECKING:
-    from solders.solders import GetTokenAccountsByOwnerResp
+    from solders.solders import GetTokenAccountsByOwnerResp, GetProgramAccounts, \
+    GetProgramAccountsMaybeJsonParsedResp
 
     from rotkehlchen.premium.premium import Premium
 
@@ -167,3 +168,26 @@ class SolanaManager(ChainManagerWithTransactions[SolanaAddress], ChainManagerWit
         """
         for address in addresses:
             self.transactions.query_transactions_for_address(address=address)
+
+    def get_raw_stake_accounts_info(self, owner: SolanaAddress):
+        log.debug(f'Fetching solana stake accounts for {owner}')
+        response: GetProgramAccountsMaybeJsonParsedResp = self.node_inquirer.query(
+            method=lambda client: client.get_program_accounts_json_parsed(
+                pubkey=Pubkey.from_string('Stake11111111111111111111111111111111111111'),
+                filters=[MemcmpOpts(offset=12, bytes=owner)],
+            ),
+        )
+
+        return response
+
+    # def get_inflation_rewards(self, owner: SolanaAddress):
+    #     log.debug(f'Fetching solana stake accounts for {owner}')
+    #     response: GetProgramAccounts = self.node_inquirer.query(
+    #         method=lambda client: client.get_inflation_reward(
+    #             pubkey=Pubkey.from_string('Stake11111111111111111111111111111111111111'),
+    #             filters=[MemcmpOpts(offset=12, bytes=owner)],
+    #         ),
+    #     )
+    #
+    #     return response
+    #
