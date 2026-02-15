@@ -1,3 +1,4 @@
+import base64
 import binascii
 import warnings as test_warnings
 from collections import defaultdict
@@ -69,7 +70,7 @@ from rotkehlchen.tests.utils.history import prices
 from rotkehlchen.tests.utils.kraken import KRAKEN_DELISTED, MockKraken
 from rotkehlchen.tests.utils.mock import MockResponse
 from rotkehlchen.tests.utils.pnl_report import query_api_create_and_get_report
-from rotkehlchen.types import AssetAmount, Location, Timestamp, TimestampMS
+from rotkehlchen.types import ApiKey, ApiSecret, AssetAmount, Location, Timestamp, TimestampMS
 from rotkehlchen.utils.serialization import jsonloads_dict
 
 if TYPE_CHECKING:
@@ -1321,3 +1322,104 @@ def test_parse_single_collateral_futures_margin(kraken):
         proper_kraken_futures_balances_response,
     )
     assert parsed_margin == {'bch': 10.0184941402}
+
+
+def test_kraken_futures_history(rotkehlchen_api_server_with_exchanges: 'APIServer'):
+    """Test that Kraken Futures history retrieval and processing works"""
+    rotki = rotkehlchen_api_server_with_exchanges.rest_api.rotkehlchen
+    kraken = cast('MockKraken', try_get_first_exchange(rotki.exchange_manager, Location.KRAKEN))
+    kraken.set_futures_api_key(ApiKey('futures_key'), ApiSecret(base64.b64encode(b'futures_secret')))
+
+    # Match the mock data timestamp (2025-11-20T10:20:41.383Z)
+    start_ts = Timestamp(1636717360) # 2021-11-12
+    end_ts = Timestamp(1763721600)   # 2025-11-21
+
+    # Mock Ledger response for spot to be empty
+    with _patch_ledger(kraken, '{"ledger": {}, "count": 0}'):
+        # Mocking ranges_to_query to cover our test period
+        with patch('rotkehlchen.db.ranges.DBQueryRanges.get_location_query_ranges', return_value=[(start_ts, end_ts)]):
+            kraken.query_history_events()
+
+    with rotki.data.db.conn.read_ctx() as cursor:
+        events = DBHistoryEvents(rotki.data.db).get_history_events_internal(
+            cursor=cursor,
+            filter_query=HistoryEventFilterQuery.make(),
+            aggregate_by_group_ids=False,
+        )
+
+    # We expect:
+    # 1. A SwapEvent from the trade (split into parts in DB)
+    # 2. A HistoryEvent from the funding (id 3 in mock)
+    # 3. A HistoryEvent from the realized_funding (id 181 in mock)
+    # 4. A SwapEvent from the liquidation (split into parts in DB)
+
+    # SwapEvent for pf_solusd buy:
+    # - amount = 8.46 - 7.05 = 1.41
+    # - price = 141.54
+    # - fee = 0.0997857 USD
+    
+    trade_swap_events = [e for e in events if e.event_type == HistoryEventType.TRADE and e.group_identifier.endswith('c4481b34-b1a8-4dcf-bf05-609f6a7e2540')]
+    if len(trade_swap_events) == 0:
+        # Maybe it's hashed differently in DB due to create_group_identifier_from_unique_id
+        # Let's find by asset and amount
+        receive_sol_candidates = [e for e in events if e.asset.identifier == 'SOL' and e.amount == FVal('1.41')]
+        assert len(receive_sol_candidates) > 0
+        trade_gid = receive_sol_candidates[0].group_identifier
+        trade_swap_events = [e for e in events if e.group_identifier == trade_gid]
+
+    assert len(trade_swap_events) == 3 # spend, receive, fee
+    
+    # Receive SOL
+    receive_sol = next(e for e in trade_swap_events if e.asset.identifier == 'SOL')
+    assert receive_sol.amount == FVal('1.41')
+    assert receive_sol.event_subtype == HistoryEventSubType.RECEIVE
+    
+    # Spend USD
+    spend_usd = next(e for e in trade_swap_events if e.asset == A_USD and e.event_subtype == HistoryEventSubType.SPEND)
+    # 1.41 * 141.54 = 199.5714
+    assert spend_usd.amount == FVal('199.5714')
+
+    # Fee part
+    fee_usd = next(e for e in trade_swap_events if e.asset == A_USD and e.event_subtype == HistoryEventSubType.FEE)
+    assert fee_usd.amount == FVal('0.0997857')
+
+    # Liquidation swap events
+    liq_swap_events = [e for e in events if e.event_type == HistoryEventType.TRADE and e.group_identifier.endswith('liq-exec-1')]
+    if len(liq_swap_events) == 0:
+        liq_spend_sol_candidates = [e for e in events if e.asset.identifier == 'SOL' and e.amount == FVal('1.0') and e.event_subtype == HistoryEventSubType.SPEND]
+        assert len(liq_spend_sol_candidates) > 0
+        liq_gid = liq_spend_sol_candidates[0].group_identifier
+        liq_swap_events = [e for e in events if e.group_identifier == liq_gid]
+
+    assert len(liq_swap_events) == 3
+
+    # Receive USD
+    liq_receive_usd = next(e for e in liq_swap_events if e.asset == A_USD and e.event_subtype == HistoryEventSubType.RECEIVE)
+    # 1.0 * 140.0 = 140.0
+    assert liq_receive_usd.amount == FVal('140.0')
+
+    # Spend SOL
+    liq_spend_sol = next(e for e in liq_swap_events if e.asset.identifier == 'SOL' and e.event_subtype == HistoryEventSubType.SPEND)
+    assert liq_spend_sol.amount == FVal('1.0')
+    assert liq_spend_sol.notes == "Futures liquidation"
+
+    # Total fee (fee + liquidation_fee)
+    # 0.5 + 1.5 = 2.0
+    liq_fee_usd = next(e for e in liq_swap_events if e.asset == A_USD and e.event_subtype == HistoryEventSubType.FEE)
+    assert liq_fee_usd.amount == FVal('2.0')
+
+    # Check Funding transfer
+    funding_event = next(e for e in events if e.event_type == HistoryEventType.RECEIVE and e.event_subtype == HistoryEventSubType.REWARD and e.notes == "Futures funding: Funding payment")
+    assert funding_event.asset == A_USD
+    assert funding_event.amount == FVal('100')
+
+    # Check Realized Funding
+    realized_funding = next(e for e in events if e.event_type == HistoryEventType.RECEIVE and e.event_subtype == HistoryEventSubType.REWARD and "realized funding" in e.notes)
+    assert realized_funding.asset == A_USD
+    assert realized_funding.amount == FVal('0.5')
+    assert realized_funding.notes == "Futures realized funding: pf_solusd"
+
+    realized_funding_loss = next(e for e in events if e.event_type == HistoryEventType.SPEND and e.event_subtype == HistoryEventSubType.FEE and "realized funding" in e.notes)
+    assert realized_funding_loss.asset.identifier == 'SOL'
+    assert realized_funding_loss.amount == FVal('0.2')
+    assert realized_funding_loss.notes == "Futures realized funding: pf_solusd"
