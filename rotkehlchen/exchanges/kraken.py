@@ -1184,7 +1184,8 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 base_entry.get('type') == 'futures liquidation' or
                 quote_entry.get('type') == 'futures liquidation'
             )
-            spend_notes = "Futures liquidation" if is_liquidation else None
+            receive_notes = 'Futures'
+            spend_notes = "Futures liquidation" if is_liquidation else 'Futures'
 
             fees = [(AssetAmount(asset=fee_asset, amount=total_fee), None, None)]
 
@@ -1200,6 +1201,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 ),
                 location_label=self.name,
                 spend_notes=spend_notes,
+                receive_notes=receive_notes,
             )
         except (DeserializationError, KeyError, UnknownAsset) as e:
             log.error(f'Failed to process kraken futures trade execution {execution_id}: {e}')
