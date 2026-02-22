@@ -328,6 +328,110 @@ KRAKEN_GENERAL_LEDGER_RESPONSE = """
 """
 
 KRAKEN_FUTURES_BALANCES_RESPONSE = """{"accounts":{"cash":{"balances":{"bch":10.0184941402,"eth":1.5717981686,"eur":4000.0,"gbp":3791.9006,"ltc":52.1910861801,"usd":5000.0,"usd credit":0,"usdc":5000.65008452,"usdt":5003.96313881,"xbt":0.0524990493,"xrp":2213.8685582},"type":"cashAccount"},"fi_bchusd":{"auxiliary":{"af":10.0184941402,"funding":0.0,"pnl":0.0,"pv":10.0184941402,"usd":0},"balances":{"bch":10.0184941402},"currency":"bch","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"fi_ethusd":{"auxiliary":{"af":1.5717981686,"funding":0.0,"pnl":0.0,"pv":1.5717981686,"usd":0},"balances":{"eth":1.5717981686},"currency":"eth","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"fi_ltcusd":{"auxiliary":{"af":52.1910861801,"funding":0.0,"pnl":0.0,"pv":52.1910861801,"usd":0},"balances":{"ltc":52.1910861801},"currency":"ltc","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"fi_xbtusd":{"auxiliary":{"af":0.0524990493,"funding":0.0,"pnl":0.0,"pv":0.0524990493,"usd":0},"balances":{"xbt":0.0524990493},"currency":"xbt","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"fi_xrpusd":{"auxiliary":{"af":2213.8685582,"funding":0.0,"pnl":0.0,"pv":2213.8685582,"usd":0},"balances":{"xrp":2213.8685582},"currency":"xrp","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"flex":{"availableMargin":21637.99025058772,"balanceValue":22082.18306965742,"collateralValue":21637.99025058772,"currencies":{"BTC":{"available":0.0524990493,"collateral":4726.015720056976,"quantity":0.0524990493,"value":4822.465020466302},"ETH":{"available":1.5717981686,"collateral":4995.828447848938,"quantity":1.5717981686,"value":5203.98796650931},"EUR":{"available":6000,"collateral":6839.616,"quantity":6000,"value":6979.2},"USD":{"available":5076.53008268181,"collateral":5076.53008268181,"quantity":5076.53008268181,"value":5076.53008268181}},"initialMargin":0,"initialMarginWithOrders":0,"maintenanceMargin":0,"marginEquity":21637.99025058772,"pnl":0,"portfolioValue":22082.18306965742,"totalUnrealized":0,"totalUnrealizedAsMargin":0,"type":"multiCollateralMarginAccount","unrealizedFunding":0},"fv_etheur":{"auxiliary":{"af":5000.0,"funding":0.0,"pnl":0.0,"pv":5000.0,"usd":0},"balances":{"eur":5000.0},"currency":"eur","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"},"fv_xbteur":{"auxiliary":{"af":5000.0,"funding":0.0,"pnl":0.0,"pv":5000.0,"usd":0},"balances":{"eur":5000.0},"currency":"eur","marginRequirements":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"triggerEstimates":{"im":0.0,"lt":0.0,"mm":0.0,"tt":0.0},"type":"marginAccount"}},"result":"success","serverTime":"2025-12-10T12:40:02.904Z"}"""  # noqa: E501
+KRAKEN_FUTURES_ACCOUNT_LOG_RESPONSE = """{
+    "result": "success",
+    "logs": [
+        {
+            "asset": "usd",
+            "contract": "pf_solusd",
+            "booking_uid": "34ec5ff3-ac12-42e3-9295-07eae09189a9",
+            "collateral": "",
+            "date": "2025-11-20T10:20:41.383Z",
+            "execution": "c4481b34-b1a8-4dcf-bf05-609f6a7e2540",
+            "fee": 0.0997857,
+            "funding_rate": -0.000007382959412393,
+            "id": 181,
+            "info": "futures trade",
+            "margin_account": "flex",
+            "mark_price": 141.48999747731,
+            "new_average_entry_price": "",
+            "new_balance": 5140.18699532125,
+            "old_average_entry_price": "",
+            "old_balance": 5140.28678102125,
+            "realized_funding": 0.5,
+            "realized_pnl": 0.0,
+            "trade_price": 141.54,
+            "conversion_spread_percentage": "",
+            "liquidation_fee": "",
+            "position_uid": ""
+        },
+        {
+            "asset": "pf_solusd",
+            "contract": "pf_solusd",
+            "booking_uid": "148aa107-9fdf-4eb1-9b4d-992ce4d00d3b",
+            "collateral": "",
+            "date": "2025-11-20T10:20:41.383Z",
+            "execution": "c4481b34-b1a8-4dcf-bf05-609f6a7e2540",
+            "fee": "",
+            "funding_rate": "",
+            "id": 180,
+            "info": "futures trade",
+            "margin_account": "flex",
+            "mark_price": 141.48999747731,
+            "new_average_entry_price": 141.5,
+            "new_balance": 8.46,
+            "old_average_entry_price": 141.492,
+            "old_balance": 7.05,
+            "realized_funding": -0.2,
+            "realized_pnl": "",
+            "trade_price": 141.54,
+            "conversion_spread_percentage": "",
+            "liquidation_fee": "",
+            "position_uid": ""
+        },
+        {
+            "id": 3,
+            "date": "2021-11-12T11:42:40.000Z",
+            "asset": "usd",
+            "amount": "100",
+            "type": "funding",
+            "info": "Funding payment"
+        },
+        {
+            "asset": "usd",
+            "contract": "pf_solusd",
+            "booking_uid": "liq-1",
+            "collateral": "",
+            "date": "2025-11-21T10:20:41.383Z",
+            "execution": "liq-exec-1",
+            "fee": 0.5,
+            "id": 201,
+            "info": "futures liquidation",
+            "type": "futures liquidation",
+            "margin_account": "flex",
+            "mark_price": 140.0,
+            "new_balance": 5000.0,
+            "old_balance": 5100.0,
+            "realized_funding": 0.0,
+            "realized_pnl": -100.0,
+            "trade_price": 140.0,
+            "liquidation_fee": 1.5,
+            "position_uid": ""
+        },
+        {
+            "asset": "pf_solusd",
+            "contract": "pf_solusd",
+            "booking_uid": "liq-2",
+            "collateral": "",
+            "date": "2025-11-21T10:20:41.383Z",
+            "execution": "liq-exec-1",
+            "fee": "",
+            "id": 200,
+            "info": "futures liquidation",
+            "type": "futures liquidation",
+            "margin_account": "flex",
+            "mark_price": 140.0,
+            "new_balance": 0.0,
+            "old_balance": 1.0,
+            "realized_funding": "",
+            "realized_pnl": "",
+            "trade_price": 140.0,
+            "liquidation_fee": "",
+            "position_uid": ""
+        }
+    ],
+    "serverTime": "2021-11-12T11:45:00.000Z"
+}"""
 
 
 def get_kraken_assets_from_globaldb() -> list[str]:
@@ -537,7 +641,7 @@ class MockKraken(Kraken):
 
     def api_query(
             self,
-            method: Literal['Balance', 'TradesHistory', 'Ledgers', 'Assets', 'AssetPairs', 'accounts'],  # noqa: E501
+            method: Literal['Balance', 'TradesHistory', 'Ledgers', 'Assets', 'AssetPairs', 'accounts', 'account-log'],  # noqa: E501
             req: dict | None = None,
     ) -> dict:
         # Pretty ugly ... mock a kraken remote error
@@ -564,6 +668,8 @@ class MockKraken(Kraken):
                 )
             # else
             return jsonloads_dict(KRAKEN_SPECIFIC_TRADES_HISTORY_RESPONSE)
+        if method == 'account-log':
+            return jsonloads_dict(KRAKEN_FUTURES_ACCOUNT_LOG_RESPONSE)
         if method == 'AssetPairs':
             data = self._load_results_from_file('assets_kraken.json')
             return data['result']
