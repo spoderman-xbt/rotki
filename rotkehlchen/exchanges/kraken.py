@@ -32,7 +32,7 @@ from rotkehlchen.db.constants import (
 )
 from rotkehlchen.db.history_events import DBHistoryEvents
 from rotkehlchen.db.settings import CachedSettings
-from rotkehlchen.errors.asset import UnknownAsset, UnprocessableTradePair
+from rotkehlchen.errors.asset import UnknownAsset
 from rotkehlchen.errors.misc import RemoteError
 from rotkehlchen.errors.serialization import DeserializationError
 from rotkehlchen.exchanges.data_structures import MarginPosition
@@ -77,7 +77,8 @@ from rotkehlchen.utils.misc import (
     timestamp_to_date,
     ts_ms_to_sec,
     ts_now,
-    ts_now_in_ms, ts_sec_to_ms,
+    ts_now_in_ms,
+    ts_sec_to_ms,
 )
 from rotkehlchen.utils.mixins.cacheable import cache_response_timewise
 from rotkehlchen.utils.mixins.enums import SerializableEnumNameMixin
@@ -380,8 +381,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
                 continue
 
             # else success
-            log.debug(f'Kraken API query successful for {method}')
-            log.debug(f'Kraken API query result: {result!r}')
+            log.debug(f'Kraken API query successful for {method}. Query result: {result!r}')
             return result
 
         raise RemoteError(
@@ -892,7 +892,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         Returns a tuple containing a list of events found
         and the last successfully queried timestamp.
         """
-        log.debug(f'Querying kraken ledger entries from {timestamp_to_date(start_ts)} to {timestamp_to_date(end_ts)}')
+        log.debug(f'Querying kraken ledger entries from {start_ts} to {end_ts}')
         spot_events: list[HistoryBaseEntry] = []
         spot_max_ts = start_ts
         try:
@@ -941,11 +941,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             futures_events, futures_with_errors = self.query_futures_history(start_ts, end_ts)
             final_events.extend(futures_events)
 
-        # If both queries had errors, we should return the spot_max_ts as the last success.
-        # If spot was skipped (e.g. no keys) but futures were processed successfully,
-        # we should return end_ts to signify the range was covered for everything queried.
-        # If we return spot_max_ts and spot was skipped, spot_max_ts is end_ts (due to our change above),
-        # so it correctly signifies we covered the range.
         if spot_with_errors or futures_with_errors:
             return final_events, Timestamp(spot_max_ts)
 
@@ -978,16 +973,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
     ) -> list[dict[str, Any]]:
         """Query futures account-log endpoint with pagination"""
         all_logs = []
-        params: dict[str, Any] = {'limit': 100}
-        params['since'] = ts_sec_to_ms(start_ts)
-        params['before'] = ts_sec_to_ms(end_ts)
-        human_readable_start_ts = timestamp_to_date(ts_ms_to_sec(start_ts))
-        human_readable_end_ts = timestamp_to_date(ts_ms_to_sec(end_ts))
-        log.debug(f'Querying kraken futures account-log from {start_ts} which is {human_readable_start_ts} to {end_ts} which is {human_readable_end_ts}')
-        log.debug(f'Querying futures account-log with params {params}')
+        params: dict[str, Any] = {'limit': 100, 'since': ts_sec_to_ms(start_ts),
+                                  'before': ts_sec_to_ms(end_ts)}
+        log.debug(f'Querying futures account-log with params {params} from {start_ts} to {end_ts}')
         while True:
-            log.debug(
-                f'Querying kraken futures entries from {human_readable_start_ts}')
             response = self.api_query('account-log', params)
             logs = response.get('logs', [])
             log.debug(f'Got {len(logs)} logs from account-log')
@@ -996,6 +985,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             
             all_logs.extend(logs)
 
+            # when the number of logs returned is less than our limit we've reached the end
             if len(logs) < params['limit']:
                 break
 
@@ -1012,7 +1002,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         # Group entries by execution ID to match trade parts
         # Entries for a trade have the same 'execution' ID
         trades_by_execution = defaultdict(list)
-        
         for entry in logs:
             execution_id = entry.get('execution')
             
@@ -1103,9 +1092,9 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             return []
 
         try:
-            # A trade has 3 entries:
+            # A trade has 2 entries:
             # 1. Entry with asset == contract (e.g. pf_solusd), containing the trade amount (delta in balance)
-            # 2. Entry with asset as collateral (e.g. usd), containing the fee and trade_price
+            # 2. Entry with asset as collateral (e.g. usd, eth), containing the fee and trade_price
             base_entry = None
             quote_entry = None
             for entry in entries:
