@@ -1011,7 +1011,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
             # Entries without execution ID
             info = entry.get('info')
-            if info in ('transfer', 'admin transfer'):
+            if info in ('transfer', 'admin transfer'):  # TODO: Will these be double counted? Ignore?
                 old_balance = deserialize_fval(entry.get('old_balance', ZERO))
                 new_balance = deserialize_fval(entry.get('new_balance', ZERO))
                 amount = new_balance - old_balance
@@ -1091,10 +1091,10 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         if not entries:
             return []
 
+        # A trade has 2 entries:
+        # 1. Entry with asset == contract (e.g. pf_solusd), containing the trade amount (delta in balance)
+        # 2. Entry with asset as collateral (e.g. usd, eth), containing the fee and trade_price
         try:
-            # A trade has 2 entries:
-            # 1. Entry with asset == contract (e.g. pf_solusd), containing the trade amount (delta in balance)
-            # 2. Entry with asset as collateral (e.g. usd, eth), containing the fee and trade_price
             base_entry = None
             quote_entry = None
             for entry in entries:
@@ -1136,30 +1136,16 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
             if amount > ZERO:
                 # buy side
                 spend_asset = quote_asset
-                # For single collateral, price is USD/ETH, and we are buying 3 ETH with 0 ETH?
-                # Actually Kraken futures logs for single collateral are weird.
-                # In pi_ethusd: base_entry is pi_ethusd, balance change is 3.0 (contracts).
-                # quote_entry is eth, balance change is -0.00011406889 (realized PnL) - fee.
-                # This doesn't look like a normal swap.
-                # However, the task says "Ensure that the code you write processes all of those logs correctly."
-                # If I treat it as a swap:
-                # Spend = amount * price (if quote is USD)
-                # But here quote is ETH. 
-                # If it's single collateral, maybe we should just report the PnL and fee?
-                # But SwapEvent is what's currently used.
-                
+                receive_amount = abs_amount
+                receive_asset = base_asset
                 if quote_asset == base_asset:
                     # Single collateral: calculate the collateral value from price
                     # Inverse contracts: value = contracts / price
                     spend_amount = abs_amount / price
-                    receive_asset = base_asset
-                    receive_amount = abs_amount
                 else:
-                    spend_asset = quote_asset
                     spend_amount = abs_amount * price
-                    receive_asset = base_asset
-                    receive_amount = abs_amount
             else:
+                # sell side
                 spend_asset = base_asset
                 spend_amount = abs_amount
                 receive_asset = quote_asset
@@ -1208,7 +1194,7 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
         contract_upper_split = contract_upper.split('_')
         currency_pair = contract_upper_split[1]
 
-        return currency_pair.removesuffix('USD')  # TODO: Find out if there's non-USD pairs
+        return currency_pair.removesuffix('USD')
 
     def history_event_from_kraken(
             self,
@@ -1446,14 +1432,6 @@ class Kraken(ExchangeInterface, ExchangeWithExtras, SignatureGeneratorMixin):
 
         urlpath_without_prefix = urlpath.removeprefix('/derivatives')
         nonce = str(ts_now_in_ms())
-
-        # Forward query parameters are part of the authent signature as a query string
-        # but for GET they are usually just in the URL.
-        # Kraken Futures authentication: base64(hmac-sha512(hash-sha256(postdata + nonce + endpoint), secret))
-        # For GET, postdata is empty string.
-        # But wait, some docs say for GET with query params, the query params should be in postdata.
-        # "If the request is a GET request with query parameters, the query parameters should be concatenated 
-        # into a string and used as the postData."
 
         post_data = urlencode(req)
 
